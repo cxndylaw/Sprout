@@ -186,7 +186,7 @@ function periodTotals() {
 }
 
 function periodLabel() {
-  return { thisMonth: 'This Month', lastMonth: 'Last Month', year: 'Year', allTime: 'All Time' }[state.period];
+  return { thisMonth: 'This Month', lastMonth: 'Last Month', year: 'This Year', allTime: 'All Time' }[state.period];
 }
 
 function sortedList(list) { return [...list].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id); }
@@ -237,6 +237,13 @@ function render() {
     phone.appendChild(modalContainer);
   }
   modalContainer.innerHTML = modalHtml;
+
+  // Lock scroll when modal is open
+  const hasModal = state.showWarning || state.showEditBudget || state.showEditGoal || 
+                   state.showAddGoal || state.showEditBudgets || state.showEditBalance || 
+                   state.showProfileEditor;
+  
+  c.style.overflow = hasModal ? 'hidden' : 'scroll';
 
   // Always update progress bars
   animateBars();
@@ -362,11 +369,11 @@ function renderHome() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <span style="font-size:18px;font-weight:600;">Analysis</span>
       <div style="position:relative;display:inline-block;">
-        <button class="graph-btn" style="padding:6px 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px;" onclick="toggleGraphPeriodMenu()">${state.graphPeriod === 'thisMonth' ? 'This Month' : state.graphPeriod === 'lastMonth' ? 'Last Month' : state.graphPeriod === 'year' ? 'Year' : 'All Time'} ${ICON.chevron}</button>
+        <button class="graph-btn" style="padding:6px 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px;" onclick="toggleGraphPeriodMenu()">${state.graphPeriod === 'thisMonth' ? 'This Month' : state.graphPeriod === 'lastMonth' ? 'Last Month' : state.graphPeriod === 'year' ? 'This Year' : 'All Time'} ${ICON.chevron}</button>
         <div class="graph-period-menu" id="graph-period-menu" style="display:none;">
           <button onclick="setGraphPeriod('thisMonth')">This Month</button>
           <button onclick="setGraphPeriod('lastMonth')">Last Month</button>
-          <button onclick="setGraphPeriod('year')">Year</button>
+          <button onclick="setGraphPeriod('year')">This Year</button>
           <button onclick="setGraphPeriod('allTime')">All Time</button>
         </div>
       </div>
@@ -488,25 +495,22 @@ function renderTrendGraphForPeriod(filteredTxns) {
   
   filteredTxns.filter(t => t.type === 'expense').forEach(t => {
     if (dailyExpense.hasOwnProperty(t.date)) {
-      dailyExpense[t.date] += t.amount;
+      dailyExpense[t.date] += Number(t.amount) || 0;
     }
   });
   
-  const maxVal = Math.max(...Object.values(dailyExpense), 100);
+  const values = Object.values(dailyExpense);
+  const maxVal = Math.max(...values, 100) || 100;
   
   let html = '<div class="graph-trend">';
   const step = Math.max(1, Math.floor(dateRange.length / 14));
   
   dateRange.forEach((date, i) => {
     if (i % step === 0 || i === dateRange.length - 1) {
-      const val = dailyExpense[date];
+      const val = dailyExpense[date] || 0;
       const pct = Math.max(5, (val / maxVal) * 100);
       const dayNum = date.split('-')[2];
-      html += `
-      <div class="trend-bar-item">
-        <div class="trend-bar" style="height:${pct}%;background:rgba(127, 185, 138, 0.6);"></div>
-        <div class="trend-date">${dayNum}</div>
-      </div>`;
+      html += `<div class="trend-bar-item"><div class="trend-bar" style="height:${pct}%;background:rgba(127, 185, 138, 0.6);"></div><div class="trend-date">${dayNum}</div></div>`;
     }
   });
   html += '</div>';
@@ -851,11 +855,11 @@ function renderBank() {
         </div>
       </div>
       <div class="category-filter">
-        <button class="filter-btn" onclick="toggleBankPeriodFilter()">${state.bankPeriod === 'thisMonth' ? 'This Mo.' : state.bankPeriod === 'lastMonth' ? 'Last Mo.' : state.bankPeriod === 'year' ? 'Year' : 'All'} ${ICON.chevron}</button>
+        <button class="filter-btn" onclick="toggleBankPeriodFilter()">${state.bankPeriod === 'thisMonth' ? 'This Mo.' : state.bankPeriod === 'lastMonth' ? 'Last Mo.' : state.bankPeriod === 'year' ? 'This Yr.' : 'All'} ${ICON.chevron}</button>
         <div class="filter-menu" id="bank-period-menu" style="display:none;">
           <button onclick="setBankPeriod('thisMonth')">This Month</button>
           <button onclick="setBankPeriod('lastMonth')">Last Month</button>
-          <button onclick="setBankPeriod('year')">Year</button>
+          <button onclick="setBankPeriod('year')">This Year</button>
           <button onclick="setBankPeriod('allTime')">All Time</button>
         </div>
       </div>
@@ -947,15 +951,15 @@ function deleteTxnConfirm(id) {
 
 function renderPeriodDropdown() {
   return `
-  <div class="period-dropdown">
-    <button class="period-btn" onclick="togglePeriodMenu()">
+  <div style="position:relative;display:inline-block;">
+    <button class="graph-btn" style="padding:6px 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px;" onclick="togglePeriodMenu()">
       ${periodLabel()} ${ICON.chevron}
     </button>
-    <div class="period-menu" id="period-menu" style="display: none;">
-      <button onclick="setPeriod('thisMonth')" class="period-option ${state.period === 'thisMonth' ? 'active' : ''}">This Month</button>
-      <button onclick="setPeriod('lastMonth')" class="period-option ${state.period === 'lastMonth' ? 'active' : ''}">Last Month</button>
-      <button onclick="setPeriod('year')" class="period-option ${state.period === 'year' ? 'active' : ''}">Year</button>
-      <button onclick="setPeriod('allTime')" class="period-option ${state.period === 'allTime' ? 'active' : ''}">All Time</button>
+    <div class="graph-period-menu" id="period-menu" style="display:none;">
+      <button onclick="setPeriod('thisMonth')" class="${state.period === 'thisMonth' ? 'active' : ''}">This Month</button>
+      <button onclick="setPeriod('lastMonth')" class="${state.period === 'lastMonth' ? 'active' : ''}">Last Month</button>
+      <button onclick="setPeriod('year')" class="${state.period === 'year' ? 'active' : ''}">This Year</button>
+      <button onclick="setPeriod('allTime')" class="${state.period === 'allTime' ? 'active' : ''}">All Time</button>
     </div>
   </div>`;
 }
@@ -1520,10 +1524,11 @@ function renderProfileEditorModal() {
       <div class="field">
         <div class="field-label">Profile Picture</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-          <div style="width:60px;height:60px;border-radius:50%;background:rgba(127,185,138,0.3);display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden;">
+          <div style="width:60px;height:60px;border-radius:50%;background:rgba(127,185,138,0.3);border:2px solid rgba(127,185,138,0.6);display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden;flex-shrink:0;">
             ${state.userAvatar ? `<img src="${state.userAvatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
           </div>
-          <input type="file" id="avatar-input" accept="image/*" onchange="handleAvatarUpload(this)" style="cursor:pointer;">
+          <input type="file" id="avatar-input" accept="image/*" onchange="handleAvatarUpload(this)" style="display:none;">
+          <button class="edit-budget-input" style="background:rgba(127,185,138,0.3);border:1px solid rgba(127,185,138,0.4);padding:8px 12px;border-radius:8px;cursor:pointer;color:var(--cream);font-size:13px;" onclick="document.getElementById('avatar-input').click();">Choose Photo</button>
         </div>
       </div>
       <div class="field">

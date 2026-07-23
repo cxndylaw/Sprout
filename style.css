@@ -34,6 +34,8 @@
 
 html {
   scroll-behavior: smooth;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -45,6 +47,8 @@ body {
   justify-content: center;
   padding: 12px;
   color: var(--cream);
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #phone {
@@ -119,11 +123,14 @@ body {
 
 #screen-content {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;
+  overflow-x: hidden;
   padding: 50px 18px 10px;
   scrollbar-width: none;
   position: relative;
-  overscroll-behavior: none;
+  overscroll-behavior: contain;
+  -webkit-overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 #screen-content::-webkit-scrollbar {
@@ -1106,6 +1113,12 @@ input[type="text"]:focus {
   background: rgba(127, 185, 138, 0.2);
 }
 
+.graph-period-menu button.active {
+  background: rgba(127, 185, 138, 0.4);
+  color: var(--income);
+  font-weight: 600;
+}
+
 /* ---------- Budget & Goals ---------- */
 .bg-panel {
   background: rgba(68, 55, 97, 0.3);
@@ -1492,6 +1505,19 @@ input[type=date] {
 
 input[type=date] {
   text-align: center;
+  font-size: 16px;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+input[type=date]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  opacity: 0.6;
 }
 
 .theme-expense input,
