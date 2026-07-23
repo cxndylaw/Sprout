@@ -127,6 +127,27 @@ let state = {
 let displayedBalance = null; // for count-up animation
 let lastScreen = null; // track screen changes for page-enter animation
 
+/* ================= DATA PERSISTENCE ================= */
+function saveState() {
+  try {
+    localStorage.setItem('sprout_data', JSON.stringify(state));
+  } catch (e) {
+    console.error('Failed to save state:', e);
+  }
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem('sprout_data');
+    if (saved) {
+      const loadedState = JSON.parse(saved);
+      Object.assign(state, loadedState);
+    }
+  } catch (e) {
+    console.error('Failed to load state:', e);
+  }
+}
+
 function dmy(iso) { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; }
 
 function fmt(n) {
@@ -228,6 +249,9 @@ function render() {
     }
     lastScreen = state.screen;
   }
+  
+  // Save state to localStorage
+  saveState();
 }
 
 function animateBars() {
@@ -1770,4 +1794,6 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
+// Load saved data on app start
+loadState();
 render();
