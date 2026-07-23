@@ -121,7 +121,8 @@ let state = {
   bankFilterCat: null,
   graphPeriod: 'thisMonth',
   bankSearchQuery: '',
-  bankPeriod: 'thisMonth'
+  bankPeriod: 'thisMonth',
+  userAvatar: null
 };
 
 let displayedBalance = null; // for count-up animation
@@ -185,7 +186,7 @@ function periodTotals() {
 }
 
 function periodLabel() {
-  return { thisMonth: 'This Month', lastMonth: 'Last Month', allTime: 'All Time' }[state.period];
+  return { thisMonth: 'This Month', lastMonth: 'Last Month', year: 'Year', allTime: 'All Time' }[state.period];
 }
 
 function sortedList(list) { return [...list].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id); }
@@ -953,6 +954,7 @@ function renderPeriodDropdown() {
     <div class="period-menu" id="period-menu" style="display: none;">
       <button onclick="setPeriod('thisMonth')" class="period-option ${state.period === 'thisMonth' ? 'active' : ''}">This Month</button>
       <button onclick="setPeriod('lastMonth')" class="period-option ${state.period === 'lastMonth' ? 'active' : ''}">Last Month</button>
+      <button onclick="setPeriod('year')" class="period-option ${state.period === 'year' ? 'active' : ''}">Year</button>
       <button onclick="setPeriod('allTime')" class="period-option ${state.period === 'allTime' ? 'active' : ''}">All Time</button>
     </div>
   </div>`;
@@ -1404,7 +1406,7 @@ function renderAccount() {
   <div class="header-plain">Account</div>
   <div class="card" style="text-align:center;position:relative;">
     <button class="profile-edit-btn" onclick="openProfileEditor()" title="Edit profile">${ICON.edit}</button>
-    <div class="avatar">${ICON.account}</div>
+    <div class="avatar" style="${state.userAvatar ? `background-image:url(${state.userAvatar});background-size:cover;background-position:center;` : ''}">${!state.userAvatar ? ICON.account : ''}</div>
     <input class="acc-name-input" value="${escapeHtml(state.userName)}" onchange="updateName(this.value)">
     <div class="acc-sub">${escapeHtml(state.userBio || 'Personal Finance Tracker')}</div>
   </div>
@@ -1516,6 +1518,15 @@ function renderProfileEditorModal() {
     <div class="plain-modal">
       <h3>Edit Profile</h3>
       <div class="field">
+        <div class="field-label">Profile Picture</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <div style="width:60px;height:60px;border-radius:50%;background:rgba(127,185,138,0.3);display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden;">
+            ${state.userAvatar ? `<img src="${state.userAvatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
+          </div>
+          <input type="file" id="avatar-input" accept="image/*" onchange="handleAvatarUpload(this)" style="cursor:pointer;">
+        </div>
+      </div>
+      <div class="field">
         <div class="field-label">Name</div>
         <input type="text" class="edit-budget-input" id="profile-name" value="${escapeHtml(state.userName)}" placeholder="Your name">
       </div>
@@ -1529,6 +1540,17 @@ function renderProfileEditorModal() {
       </div>
     </div>
   </div>`;
+}
+
+function handleAvatarUpload(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      state.userAvatar = e.target.result;
+      render();
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
 }
 
 function saveProfileEditor() {
@@ -1654,7 +1676,7 @@ function renderAddTxn() {
     <div class="field"><input type="text" id="f-desc" placeholder="e.g. Coffee with a friend" value="${escapeHtml(f.desc)}" oninput="state.form.desc=this.value"></div>
 
     <div class="field-label">Amount</div>
-    <div class="field"><div class="amount-wrap"><span>${cur()}</span><input type="number" id="f-amount" placeholder="0.00" value="${f.amount}" oninput="state.form.amount=this.value"></div></div>
+    <div class="amount-wrap"><span>${cur()}</span><input type="number" id="f-amount" placeholder="0.00" value="${f.amount}" oninput="state.form.amount=this.value"></div>
 
     <div class="field-label">Date</div>
     <div class="field"><input type="date" id="f-date" value="${f.date}" onchange="state.form.date=this.value"></div>
