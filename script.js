@@ -122,6 +122,7 @@ let state = {
   graphPeriod: 'thisMonth',
   bankSearchQuery: '',
   bankPeriod: 'thisMonth',
+  bankFilterType: 'all',
   userAvatar: null
 };
 
@@ -793,6 +794,13 @@ function renderBank() {
     rows = rows.filter(tx => tx.cat === state.bankFilterCat);
   }
   
+  // Filter by transaction type (income/expense)
+  if (state.bankFilterType === 'income') {
+    rows = rows.filter(tx => tx.type === 'income');
+  } else if (state.bankFilterType === 'expense') {
+    rows = rows.filter(tx => tx.type === 'expense');
+  }
+  
   // Filter by search query
   if (state.bankSearchQuery) {
     rows = rows.filter(tx => (tx.desc || tx.cat).toLowerCase().includes(state.bankSearchQuery.toLowerCase()));
@@ -845,17 +853,27 @@ function renderBank() {
   </div>
 
   <div class="txn-header">
-    <span style="font-weight:600;">Transactions</span>
-    <div style="display:flex;gap:8px;align-items:center;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-weight:600;">Transactions</span>
       <div class="category-filter">
-        <button class="filter-btn" onclick="toggleCategoryFilter()">${state.bankFilterCat ? state.bankFilterCat : 'All'} ${ICON.chevron}</button>
+        <button class="filter-btn" onclick="toggleBankTypeFilter()">Filter ${ICON.chevron}</button>
+        <div class="filter-menu" id="bank-type-menu" style="display:none;">
+          <button onclick="setBankFilterType('all')" class="${state.bankFilterType === 'all' ? 'active' : ''}">All</button>
+          <button onclick="setBankFilterType('income')" class="${state.bankFilterType === 'income' ? 'active' : ''}">Income</button>
+          <button onclick="setBankFilterType('expense')" class="${state.bankFilterType === 'expense' ? 'active' : ''}">Expense</button>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <div class="category-filter">
+        <button class="filter-btn" onclick="toggleCategoryFilter()">${state.bankFilterCat ? state.bankFilterCat : 'Category'} ${ICON.chevron}</button>
         <div class="filter-menu" id="cat-filter-menu" style="display:none;">
-          <button onclick="setCategoryFilter(null)">All Categories</button>
+          <button onclick="setCategoryFilter(null)">All</button>
           ${Object.keys(expensesByCategory).map(cat => `<button onclick="setCategoryFilter('${cat}')">${cat}</button>`).join('')}
         </div>
       </div>
       <div class="category-filter">
-        <button class="filter-btn" onclick="toggleBankPeriodFilter()">${state.bankPeriod === 'thisMonth' ? 'This Mo.' : state.bankPeriod === 'lastMonth' ? 'Last Mo.' : state.bankPeriod === 'year' ? 'This Yr.' : 'All'} ${ICON.chevron}</button>
+        <button class="filter-btn" onclick="toggleBankPeriodFilter()">${state.bankPeriod === 'thisMonth' ? 'This Month' : state.bankPeriod === 'lastMonth' ? 'Last Month' : state.bankPeriod === 'year' ? 'This Year' : 'All Time'} ${ICON.chevron}</button>
         <div class="filter-menu" id="bank-period-menu" style="display:none;">
           <button onclick="setBankPeriod('thisMonth')">This Month</button>
           <button onclick="setBankPeriod('lastMonth')">Last Month</button>
@@ -928,6 +946,18 @@ function searchTransactions(query) {
   render();
 }
 
+function setBankFilterType(type) {
+  state.bankFilterType = type;
+  const menu = document.getElementById('bank-type-menu');
+  if (menu) menu.style.display = 'none';
+  render();
+}
+
+function toggleBankTypeFilter() {
+  const menu = document.getElementById('bank-type-menu');
+  if (menu) menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+}
+
 function toggleBankPeriodFilter() {
   const menu = document.getElementById('bank-period-menu');
   if (menu) menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
@@ -944,6 +974,11 @@ function deleteTxnConfirm(id) {
   const tx = state.txns.find(t => t.id === id);
   if (!tx) return;
   if (confirm(`Delete "${tx.desc || tx.cat}" (${cur()}${fmt(tx.amount)})?`)) {
+    // If this is an income allocated to a goal, reduce the goal's saved amount
+    if (tx.type === 'income' && tx.allocateGoalId) {
+      const g = state.goals.find(g => g.id === tx.allocateGoalId);
+      if (g) g.saved = Math.max(0, g.saved - tx.amount);
+    }
     state.txns = state.txns.filter(t => t.id !== id);
     render();
   }
@@ -1736,24 +1771,30 @@ function saveTxn() {
     return;
   }
 
-  state.txns.push({ id: state.nextId++, desc: f.desc.trim(), amount: amt, type: f.type, cat: f.cat, date: f.date });
-
+  const txn = { id: state.nextId++, desc: f.desc.trim(), amount: amt, type: f.type, cat: f.cat, date: f.date };
+  
   if (f.type === 'income' && f.allocate && f.allocateGoalId) {
+    txn.allocateGoalId = f.allocateGoalId;
     const g = state.goals.find(g => g.id === f.allocateGoalId);
     if (g) g.saved += amt;
   }
+  
+  state.txns.push(txn);
 
+  // Only check budget warnings for expense transactions
   state.warningItems = [];
-  Object.keys(state.budgets).forEach(cat => {
-    const budget = state.budgets[cat];
-    const spent = spentByCat(cat);
-    const pct = Math.round((spent / budget) * 100);
-    if (spent > budget) {
-      state.warningItems.push({ type: 'over', text: `${cat} — You're ${cur()}${fmt(spent - budget)} over budget` });
-    } else if (pct >= 85) {
-      state.warningItems.push({ type: 'warn', text: `${cat} — ${pct}% of budget used` });
-    }
-  });
+  if (f.type === 'expense') {
+    Object.keys(state.budgets).forEach(cat => {
+      const budget = state.budgets[cat];
+      const spent = spentByCat(cat);
+      const pct = Math.round((spent / budget) * 100);
+      if (spent > budget) {
+        state.warningItems.push({ type: 'over', text: `${cat} — You're ${cur()}${fmt(spent - budget)} over budget` });
+      } else if (pct >= 85) {
+        state.warningItems.push({ type: 'warn', text: `${cat} — ${pct}% of budget used` });
+      }
+    });
+  }
 
   state.screen = 'home';
   setPhoneTheme('neutral');

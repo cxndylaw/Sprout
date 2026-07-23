@@ -855,6 +855,7 @@ button {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
+  gap: 8px;
 }
 
 .txn-list {
@@ -1027,24 +1028,34 @@ input[type="text"]:focus {
   background: rgba(74, 107, 88, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: var(--cream);
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 8px;
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
   font-weight: 500;
+  min-width: 70px;
+  white-space: nowrap;
 }
 
 .filter-btn:hover {
   background: rgba(74, 107, 88, 0.7);
 }
 
+.filter-btn.active {
+  background: rgba(127, 185, 138, 0.4);
+  border-color: rgba(127, 185, 138, 0.5);
+  color: var(--cream);
+  font-weight: 600;
+}
+
 .filter-menu {
   position: absolute;
   top: 100%;
-  left: 0;
+  right: 0;
   background: rgba(44, 71, 56, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1075,6 +1086,12 @@ input[type="text"]:focus {
 
 .filter-menu button:hover {
   background: rgba(127, 185, 138, 0.2);
+}
+
+.filter-menu button.active {
+  background: rgba(127, 185, 138, 0.4);
+  color: var(--income);
+  font-weight: 600;
 }
 
 .graph-period-menu {
