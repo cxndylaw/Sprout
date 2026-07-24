@@ -422,7 +422,7 @@ function renderHome() {
     </div>
     <div style="display:flex;gap:4px;margin-bottom:14px;">
       <button class="graph-btn ${state.graphType === 'category' ? 'active' : ''}" onclick="setGraphType('category')" style="font-size:11px;">Category</button>
-      <button class="graph-btn ${state.graphType === 'trend' ? 'active' : ''}" onclick="setGraphType('trend')" style="font-size:11px;">Trend</button>
+      <button class="graph-btn ${state.graphType === 'trend' ? 'active' : ''}" onclick="setGraphType('trend')" style="font-size:11px;">Monthly</button>
       <button class="graph-btn ${state.graphType === 'income' ? 'active' : ''}" onclick="setGraphType('income')" style="font-size:11px;">Income vs Expense</button>
     </div>
     ${renderCombinedAnalysis()}
@@ -465,7 +465,58 @@ function renderCombinedAnalysis() {
     });
     topSection += '</div>';
   } else if (state.graphType === 'trend') {
-    topSection = renderTrendGraphForPeriod(filteredTxns);
+    // Monthly income vs expense grouped bars — last 6 months
+    const monthMap = {};
+    const allTxns = state.txns; // always show last 6 months regardless of period filter
+    allTxns.forEach(tx => {
+      const date = new Date(tx.date + 'T00:00:00');
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthMap[key]) monthMap[key] = { income: 0, expense: 0 };
+      tx.type === 'income' ? monthMap[key].income += tx.amount : monthMap[key].expense += tx.amount;
+    });
+    
+    // Last 6 months sorted oldest → newest
+    const now = new Date();
+    const last6 = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('en-US', { month: 'short' });
+      last6.push({ key, label, income: monthMap[key]?.income || 0, expense: monthMap[key]?.expense || 0 });
+    }
+    
+    const maxVal = Math.max(...last6.flatMap(m => [m.income, m.expense]), 1);
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    topSection = `
+    <div style="display:flex;align-items:flex-end;gap:6px;height:110px;margin-bottom:8px;">
+      ${last6.map(m => {
+        const inPct = Math.max(4, (m.income / maxVal) * 100);
+        const exPct = Math.max(4, (m.expense / maxVal) * 100);
+        const isCurrent = m.key === currentKey;
+        return `
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
+          <div style="flex:1;display:flex;align-items:flex-end;gap:2px;width:100%;">
+            <div style="flex:1;height:${inPct}%;background:rgba(127,185,138,${isCurrent ? '0.9' : '0.5'});border-radius:3px 3px 0 0;min-height:4px;"></div>
+            <div style="flex:1;height:${exPct}%;background:rgba(201,107,92,${isCurrent ? '0.9' : '0.5'});border-radius:3px 3px 0 0;min-height:4px;"></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:6px;">
+      ${last6.map(m => {
+        const isCurrent = m.key === currentKey;
+        return `<div style="flex:1;text-align:center;font-size:9px;color:${isCurrent ? 'var(--cream)' : 'var(--cream-dim)'};font-weight:${isCurrent ? '600' : '400'};">${m.label}</div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:12px;margin-top:10px;">
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--cream-dim);">
+        <div style="width:10px;height:10px;border-radius:2px;background:rgba(127,185,138,0.7);"></div>Income
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--cream-dim);">
+        <div style="width:10px;height:10px;border-radius:2px;background:rgba(201,107,92,0.7);"></div>Expense
+      </div>
+    </div>`;
   } else if (state.graphType === 'income') {
     const income = filteredTxns.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0);
     const expense = filteredTxns.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
