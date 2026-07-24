@@ -2170,3 +2170,24 @@ input:focus {
     font-size: 12px;
   }
 }
+
+/* ================= SUBSCRIPTIONS ================= */
+.color-dot {
+  transition: outline .15s ease;
+  flex-shrink: 0;
+}
+
+select option {
+  background: #2c4738;
+  color: var(--cream);
+}
+
+.modal-btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-btn-row button {
+  flex: 1;
+}

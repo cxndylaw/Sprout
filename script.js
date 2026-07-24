@@ -22,7 +22,8 @@ const ICON = {
   heart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>`,
   trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>`,
   bell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>`,
-  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L21 6Z"/></svg>`
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L21 6Z"/></svg>`,
+  subscription: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>`
 };
 
 const CAT_ICON = {
@@ -125,7 +126,17 @@ let state = {
   bankFilterType: 'all',
   userAvatar: null,
   budgetMode: 'fixed',
-  budgetsPercentage: {}
+  budgetsPercentage: {},
+  subscriptions: [
+    { id: 1, name: 'Netflix', amount: 22.99, cycle: 'monthly', cat: 'Entertainment', color: '#E50914' },
+    { id: 2, name: 'Spotify', amount: 11.99, cycle: 'monthly', cat: 'Entertainment', color: '#1DB954' },
+    { id: 3, name: 'iCloud', amount: 4.49, cycle: 'monthly', cat: 'Storage', color: '#007AFF' },
+    { id: 4, name: 'ChatGPT Plus', amount: 29.99, cycle: 'monthly', cat: 'Productivity', color: '#10A37F' }
+  ],
+  nextSubId: 5,
+  showAddSub: false,
+  showEditSub: false,
+  editSubData: null
 };
 
 let displayedBalance = null; // for count-up animation
@@ -238,6 +249,7 @@ function render() {
   else if (state.screen === 'budget') html = renderBudget();
   else if (state.screen === 'account') html = renderAccount();
   else if (state.screen === 'addTxn') html = renderAddTxn();
+  else if (state.screen === 'subscriptions') html = renderSubscriptions();
 
   // Only add page-enter animation when screen changes
   if (state.screen !== lastScreen) {
@@ -256,6 +268,8 @@ function render() {
   if (state.showEditBudgets) modalHtml += renderEditBudgetsModal();
   if (state.showEditBalance) modalHtml += renderStartingBalanceModal();
   if (state.showProfileEditor) modalHtml += renderProfileEditorModal();
+  if (state.showAddSub) modalHtml += renderAddSubModal();
+  if (state.showEditSub) modalHtml += renderEditSubModal();
 
   // Get or create modal container
   let modalContainer = phone.querySelector('#modal-container');
@@ -269,7 +283,7 @@ function render() {
   // Lock scroll when modal is open
   const hasModal = state.showWarning || state.showEditBudget || state.showEditGoal || 
                    state.showAddGoal || state.showEditBudgets || state.showEditBalance || 
-                   state.showProfileEditor;
+                   state.showProfileEditor || state.showAddSub || state.showEditSub;
   
   c.style.overflow = hasModal ? 'hidden' : 'scroll';
 
@@ -1517,6 +1531,7 @@ function renderAccount() {
     <div class="row-between"><span>Active goals</span><strong>${state.goals.length}</strong></div>
   </div>
   <div class="card settings-list">
+    <div class="s-row clickable" onclick="goTo('subscriptions')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.subscription}</span> Subscriptions</span>${ICON.chevron}</div>
     <div class="s-row clickable" onclick="openStartingBalanceEditor()"><span>Starting balance: <strong>${cur()}${fmt(state.startingBalance)}</strong></span>${ICON.chevron}</div>
     
     <div class="s-row">
@@ -1749,6 +1764,7 @@ function renderAddTxn() {
     <div class="field-label">Category</div>
     <div class="cat-grid">
       ${EXPENSE_CATS_PRIMARY.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
+      <button class="cat-chip ${f.cat === 'Subscription' ? 'selected' : ''}" onclick="setTxnCat('Subscription')">Subscription</button>
       <button class="cat-chip" onclick="toggleMore()">${f.moreOpen ? 'Less...' : 'More...'}</button>
     </div>
     <div class="more-panel ${f.moreOpen ? 'open' : ''}" id="more-panel">
@@ -1905,6 +1921,314 @@ function goTo(screen) {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+/* ================= SUBSCRIPTIONS ================= */
+
+const SUB_CYCLES = ['monthly', 'yearly', 'weekly', 'quarterly'];
+const SUB_CATS = ['Entertainment', 'Productivity', 'Storage', 'Health & Fitness', 'News', 'Shopping', 'Other'];
+const SUB_COLORS = ['#E50914', '#1DB954', '#007AFF', '#FF6B35', '#A855F7', '#10A37F', '#F59E0B', '#EF4444', '#6366F1'];
+
+function subMonthlyAmount(sub) {
+  if (sub.cycle === 'monthly') return sub.amount;
+  if (sub.cycle === 'yearly') return sub.amount / 12;
+  if (sub.cycle === 'weekly') return sub.amount * 4.33;
+  if (sub.cycle === 'quarterly') return sub.amount / 3;
+  return sub.amount;
+}
+
+function subYearlyAmount(sub) {
+  if (sub.cycle === 'monthly') return sub.amount * 12;
+  if (sub.cycle === 'yearly') return sub.amount;
+  if (sub.cycle === 'weekly') return sub.amount * 52;
+  if (sub.cycle === 'quarterly') return sub.amount * 4;
+  return sub.amount;
+}
+
+function renderSubscriptions() {
+  const subs = state.subscriptions || [];
+  const totalMonthly = subs.reduce((sum, s) => sum + subMonthlyAmount(s), 0);
+  const totalYearly = totalMonthly * 12;
+
+  // Group by category for breakdown
+  const byCat = {};
+  subs.forEach(s => {
+    const cat = s.cat || 'Other';
+    if (!byCat[cat]) byCat[cat] = 0;
+    byCat[cat] += subMonthlyAmount(s);
+  });
+  const catEntries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+
+  // Bar chart max
+  const maxCatVal = Math.max(...catEntries.map(e => e[1]), 1);
+
+  // Subscription txns this month (tagged as Subscription cat)
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const subTxnsThisMonth = state.txns.filter(t => t.type === 'expense' && t.cat === 'Subscription' && t.date >= startOfMonth);
+  const trackedSpend = subTxnsThisMonth.reduce((sum, t) => sum + t.amount, 0);
+
+  // All expenses this month for the comparison chart
+  const allExpensesThisMonth = state.txns.filter(t => t.type === 'expense' && t.date >= startOfMonth);
+  const totalExpenses = allExpensesThisMonth.reduce((sum, t) => sum + t.amount, 0);
+  const subPct = totalExpenses > 0 ? Math.round((trackedSpend / totalExpenses) * 100) : 0;
+
+  return `
+  <div class="form-header">
+    <button class="back-btn" onclick="goTo('account')">${ICON.back} Back</button>
+    <h2>Subscriptions</h2>
+  </div>
+
+  <!-- Summary cards -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+    <div class="card" style="text-align:center;padding:14px 10px;">
+      <div style="font-size:11px;color:var(--cream-dim);margin-bottom:4px;">Monthly</div>
+      <div style="font-size:20px;font-weight:700;color:var(--income);">${cur()}${fmt(totalMonthly)}</div>
+      <div style="font-size:10px;color:var(--cream-dim);margin-top:2px;">${subs.length} active</div>
+    </div>
+    <div class="card" style="text-align:center;padding:14px 10px;">
+      <div style="font-size:11px;color:var(--cream-dim);margin-bottom:4px;">Yearly</div>
+      <div style="font-size:20px;font-weight:700;color:var(--expense);">${cur()}${fmt(totalYearly)}</div>
+      <div style="font-size:10px;color:var(--cream-dim);margin-top:2px;">per year total</div>
+    </div>
+  </div>
+
+  <!-- Spend vs budget comparison -->
+  <div class="card" style="margin-bottom:14px;">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px;">Subscriptions vs Total Spend</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+      <div style="font-size:12px;color:var(--cream-dim);width:90px;">Subscriptions</div>
+      <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:4px;height:10px;overflow:hidden;">
+        <div class="progress-fill" data-target="${subPct}%" style="height:100%;background:var(--expense-color,rgba(201,107,92,0.7));border-radius:4px;"></div>
+      </div>
+      <div style="font-size:12px;font-weight:600;width:40px;text-align:right;">${subPct}%</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="font-size:12px;color:var(--cream-dim);width:90px;">Other</div>
+      <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:4px;height:10px;overflow:hidden;">
+        <div class="progress-fill" data-target="${100 - subPct}%" style="height:100%;background:rgba(127,185,138,0.6);border-radius:4px;"></div>
+      </div>
+      <div style="font-size:12px;font-weight:600;width:40px;text-align:right;">${100 - subPct}%</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:11px;color:var(--cream-dim);">
+      <span>Tracked this month: <strong style="color:var(--cream)">${cur()}${fmt(trackedSpend)}</strong></span>
+      <span>Total: <strong style="color:var(--cream)">${cur()}${fmt(totalExpenses)}</strong></span>
+    </div>
+  </div>
+
+  <!-- By category breakdown -->
+  ${catEntries.length > 0 ? `
+  <div class="card" style="margin-bottom:14px;">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px;">By Category</div>
+    ${catEntries.map(([cat, val]) => `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--cream-dim);width:100px;flex-shrink:0;">${cat}</div>
+        <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:4px;height:8px;overflow:hidden;">
+          <div class="progress-fill" data-target="${Math.round((val/maxCatVal)*100)}%" style="height:100%;background:rgba(127,185,138,0.6);border-radius:4px;"></div>
+        </div>
+        <div style="font-size:12px;font-weight:600;width:54px;text-align:right;">${cur()}${fmt(val)}/mo</div>
+      </div>
+    `).join('')}
+  </div>` : ''}
+
+  <!-- Subscription list -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <span style="font-weight:600;">All Subscriptions</span>
+    <button class="filter-btn" style="min-width:auto;padding:6px 12px;background:rgba(127,185,138,0.3);border-color:rgba(127,185,138,0.4);" onclick="openAddSub()">+ Add</button>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
+    ${subs.length === 0 ? `<div class="dim" style="text-align:center;padding:24px;">No subscriptions yet — tap Add to get started</div>` : ''}
+    ${subs.map(s => {
+      const monthly = subMonthlyAmount(s);
+      const yearly = subYearlyAmount(s);
+      return `
+      <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer;" onclick="openEditSub(${s.id})">
+        <div style="width:40px;height:40px;border-radius:10px;background:${s.color || '#4a6b58'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">${s.emoji || '📦'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:13px;">${escapeHtml(s.name)}</div>
+          <div style="font-size:11px;color:var(--cream-dim);">${s.cat} · ${s.cycle}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-weight:700;font-size:14px;">${cur()}${fmt(s.amount)}</div>
+          <div style="font-size:10px;color:var(--cream-dim);">${s.cycle === 'monthly' ? '' : `${cur()}${fmt(monthly)}/mo`}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function openAddSub() {
+  state.showAddSub = true;
+  render();
+}
+
+function closeAddSub() {
+  state.showAddSub = false;
+  render();
+}
+
+function openEditSub(id) {
+  const sub = (state.subscriptions || []).find(s => s.id === id);
+  if (!sub) return;
+  state.editSubData = { ...sub };
+  state.showEditSub = true;
+  render();
+}
+
+function closeEditSub() {
+  state.showEditSub = false;
+  state.editSubData = null;
+  render();
+}
+
+function saveAddSub() {
+  const name = document.getElementById('sub-name').value.trim();
+  const amount = parseFloat(document.getElementById('sub-amount').value);
+  const cycle = document.getElementById('sub-cycle').value;
+  const cat = document.getElementById('sub-cat').value;
+  const color = document.getElementById('sub-color').value;
+  const emoji = document.getElementById('sub-emoji').value.trim() || '📦';
+  
+  if (!name || !amount || amount <= 0) {
+    showToast('Please enter a valid name and amount', 'error', 2500);
+    return;
+  }
+  
+  if (!state.subscriptions) state.subscriptions = [];
+  state.subscriptions.push({ id: state.nextSubId++, name, amount, cycle, cat, color, emoji });
+  showToast(`${name} added!`, 'success', 2500);
+  state.showAddSub = false;
+  render();
+}
+
+function saveEditSub() {
+  const name = document.getElementById('sub-name').value.trim();
+  const amount = parseFloat(document.getElementById('sub-amount').value);
+  const cycle = document.getElementById('sub-cycle').value;
+  const cat = document.getElementById('sub-cat').value;
+  const color = document.getElementById('sub-color').value;
+  const emoji = document.getElementById('sub-emoji').value.trim() || '📦';
+  
+  if (!name || !amount || amount <= 0) {
+    showToast('Please enter a valid name and amount', 'error', 2500);
+    return;
+  }
+  
+  const sub = state.subscriptions.find(s => s.id === state.editSubData.id);
+  if (sub) {
+    Object.assign(sub, { name, amount, cycle, cat, color, emoji });
+    showToast('Subscription updated!', 'success', 2500);
+  }
+  state.showEditSub = false;
+  state.editSubData = null;
+  render();
+}
+
+function deleteSubConfirm(id) {
+  const sub = (state.subscriptions || []).find(s => s.id === id);
+  if (!sub) return;
+  if (confirm(`Delete "${sub.name}"?`)) {
+    state.subscriptions = state.subscriptions.filter(s => s.id !== id);
+    showToast('Subscription deleted', 'success', 2500);
+    state.showEditSub = false;
+    state.editSubData = null;
+    render();
+  }
+}
+
+function renderAddSubModal() {
+  return `
+  <div class="modal-overlay">
+    <div class="plain-modal">
+      <h3>Add Subscription</h3>
+      <div class="field">
+        <div class="field-label">Name</div>
+        <input type="text" id="sub-name" placeholder="e.g. Netflix">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field">
+          <div class="field-label">Amount</div>
+          <div class="amount-wrap"><span>${cur()}</span><input type="number" id="sub-amount" placeholder="0.00"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">Emoji</div>
+          <input type="text" id="sub-emoji" placeholder="📦" maxlength="2" style="text-align:center;font-size:20px;">
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Billing cycle</div>
+        <select id="sub-cycle" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
+          ${SUB_CYCLES.map(c => `<option value="${c}">${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Category</div>
+        <select id="sub-cat" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
+          ${SUB_CATS.map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Colour</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${SUB_COLORS.map(c => `<div onclick="document.getElementById('sub-color').value='${c}';this.parentElement.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='2px solid white';" class="color-dot" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;"></div>`).join('')}
+          <input type="color" id="sub-color" value="#4a6b58" style="width:24px;height:24px;border:none;border-radius:50%;cursor:pointer;background:none;padding:0;">
+        </div>
+      </div>
+      <div class="modal-btn-row">
+        <button class="cancel" onclick="closeAddSub()">Cancel</button>
+        <button class="confirm" onclick="saveAddSub()">Add</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderEditSubModal() {
+  const d = state.editSubData;
+  if (!d) return '';
+  return `
+  <div class="modal-overlay">
+    <div class="plain-modal">
+      <h3>Edit Subscription</h3>
+      <div class="field">
+        <div class="field-label">Name</div>
+        <input type="text" id="sub-name" value="${escapeHtml(d.name)}" placeholder="e.g. Netflix">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field">
+          <div class="field-label">Amount</div>
+          <div class="amount-wrap"><span>${cur()}</span><input type="number" id="sub-amount" value="${d.amount}" placeholder="0.00"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">Emoji</div>
+          <input type="text" id="sub-emoji" value="${d.emoji || '📦'}" placeholder="📦" maxlength="2" style="text-align:center;font-size:20px;">
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Billing cycle</div>
+        <select id="sub-cycle" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
+          ${SUB_CYCLES.map(c => `<option value="${c}" ${d.cycle===c?'selected':''}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Category</div>
+        <select id="sub-cat" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
+          ${SUB_CATS.map(c => `<option value="${c}" ${d.cat===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Colour</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${SUB_COLORS.map(c => `<div onclick="document.getElementById('sub-color').value='${c}';this.parentElement.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='2px solid white';" class="color-dot" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;${d.color===c?'outline:2px solid white;':''}" ></div>`).join('')}
+          <input type="color" id="sub-color" value="${d.color || '#4a6b58'}" style="width:24px;height:24px;border:none;border-radius:50%;cursor:pointer;background:none;padding:0;">
+        </div>
+      </div>
+      <div class="modal-btn-row">
+        <button class="cancel" onclick="closeEditSub()">Cancel</button>
+        <button class="confirm" style="background:rgba(201,107,92,0.4);border-color:rgba(201,107,92,0.5);" onclick="deleteSubConfirm(${d.id})">Delete</button>
+        <button class="confirm" onclick="saveEditSub()">Save</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 /* ---------- Toast Notifications ---------- */
