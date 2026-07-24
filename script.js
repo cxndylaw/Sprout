@@ -1123,8 +1123,41 @@ function renderBudget() {
         return a.name.localeCompare(b.name);
       }
     });
+
+    // Calculate goal vs spending money
+    const t = totals();
+    const totalSaved = state.goals.reduce((sum, g) => sum + g.saved, 0);
+    const totalGoalTarget = state.goals.reduce((sum, g) => sum + g.goal, 0);
+    const spendableMoney = t.balance - totalSaved;
+    const goalsComplete = state.goals.filter(g => g.saved >= g.goal).length;
+    const overallPct = totalGoalTarget > 0 ? Math.min(100, Math.round((totalSaved / totalGoalTarget) * 100)) : 0;
+
+    const summaryCard = `
+    <div class="card" style="margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--cream-dim);">Overview</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div style="background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.25);border-radius:12px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:var(--cream-dim);margin-bottom:4px;">Saved in Goals</div>
+          <div style="font-size:18px;font-weight:700;color:var(--income);">${cur()}${fmt(totalSaved)}</div>
+          <div style="font-size:10px;color:var(--cream-dim);margin-top:2px;">${goalsComplete}/${state.goals.length} complete</div>
+        </div>
+        <div style="background:rgba(201,107,92,0.15);border:1px solid rgba(201,107,92,0.25);border-radius:12px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:var(--cream-dim);margin-bottom:4px;">Free to Spend</div>
+          <div style="font-size:18px;font-weight:700;color:${spendableMoney < 0 ? 'var(--red-bar)' : 'var(--cream)'};">${cur()}${fmt(Math.abs(spendableMoney))}</div>
+          <div style="font-size:10px;color:var(--cream-dim);margin-top:2px;">${spendableMoney < 0 ? 'over-allocated' : 'available'}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--cream-dim);margin-bottom:6px;">Overall progress · ${overallPct}%</div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:6px;height:8px;overflow:hidden;">
+        <div class="progress-fill" data-target="${overallPct}%" style="height:100%;background:rgba(127,185,138,0.7);border-radius:6px;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--cream-dim);">
+        <span>Saved: <strong style="color:var(--cream)">${cur()}${fmt(totalSaved)}</strong></span>
+        <span>Target: <strong style="color:var(--cream)">${cur()}${fmt(totalGoalTarget)}</strong></span>
+      </div>
+    </div>`;
     
-    cardsHtml = `<div class="grid2">` + sortedGoals.map(g => {
+    cardsHtml = summaryCard + `<div class="grid2">` + sortedGoals.map(g => {
       const pct = g.goal > 0 ? Math.round((g.saved / g.goal) * 100) : 0;
       const remaining = Math.max(0, g.goal - g.saved);
       return `
@@ -1371,6 +1404,10 @@ function deleteBudget(cat) {
     delete state.budgetsPercentage[cat];
     // Remove the category from any transactions that used it
     state.txns.forEach(t => { if (t.cat === cat) t.cat = ''; });
+    // Clear bank filter if it was set to this category
+    if (state.bankFilterCat === cat) state.bankFilterCat = null;
+    // Clear form cat if it was set to this category
+    if (state.form.cat === cat) state.form.cat = '';
     showToast(`Budget deleted`, 'success', 2500);
     render();
   }
@@ -1769,22 +1806,22 @@ function renderAddTxn() {
 
   let bodyExtra = '';
   if (isExpense) {
-    // Get all budget categories that aren't in primary or more lists
+    // All categories come from budgets + Subscription. Split into primary (first 5) and rest.
     const allBudgetCats = Object.keys(state.budgets);
-    const customCats = allBudgetCats.filter(cat => !EXPENSE_CATS_PRIMARY.includes(cat) && !EXPENSE_CATS_MORE.includes(cat));
+    const primaryCats = allBudgetCats.slice(0, 5);
+    const moreCats = allBudgetCats.slice(5);
+    const hasMore = moreCats.length > 0;
     
     bodyExtra = `
     <div class="field-label">Category</div>
     <div class="cat-grid">
-      ${EXPENSE_CATS_PRIMARY.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
+      ${primaryCats.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
       <button class="cat-chip ${f.cat === 'Subscription' ? 'selected' : ''}" onclick="setTxnCat('Subscription')">Subscription</button>
-      <button class="cat-chip" onclick="toggleMore()">${f.moreOpen ? 'Less...' : 'More...'}</button>
+      ${hasMore ? `<button class="cat-chip" onclick="toggleMore()">${f.moreOpen ? 'Less...' : 'More...'}</button>` : ''}
     </div>
-    <div class="more-panel ${f.moreOpen ? 'open' : ''}" id="more-panel">
-      ${EXPENSE_CATS_MORE.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
-      ${customCats.length > 0 ? `<div class="cat-divider">Custom Categories</div>` : ''}
-      ${customCats.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
-    </div>
+    ${hasMore ? `<div class="more-panel ${f.moreOpen ? 'open' : ''}" id="more-panel">
+      ${moreCats.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
+    </div>` : ''}
     ${budgetInfo}`;
   } else {
     const splits = f.splitGoals || [];
