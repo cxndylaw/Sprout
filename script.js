@@ -123,7 +123,9 @@ let state = {
   bankSearchQuery: '',
   bankPeriod: 'thisMonth',
   bankFilterType: 'all',
-  userAvatar: null
+  userAvatar: null,
+  budgetMode: 'fixed',
+  budgetsPercentage: {}
 };
 
 let displayedBalance = null; // for count-up animation
@@ -184,6 +186,31 @@ function periodTotals() {
   let income = 0, expense = 0;
   list.forEach(t => t.type === 'income' ? income += t.amount : expense += t.amount);
   return { income, expense, net: income - expense, list };
+}
+
+function getPeriodTotals(period) {
+  // Get totals for a specific period without changing state
+  let filteredTxns = state.txns;
+  
+  if (period === 'thisMonth') {
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    filteredTxns = state.txns.filter(t => t.date >= startDate);
+  } else if (period === 'lastMonth') {
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
+    const startDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1).toISOString().slice(0, 10);
+    const endDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0).toISOString().slice(0, 10);
+    filteredTxns = state.txns.filter(t => t.date >= startDate && t.date <= endDate);
+  } else if (period === 'year') {
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+    filteredTxns = state.txns.filter(t => t.date >= startDate);
+  }
+  
+  let income = 0, expense = 0;
+  filteredTxns.forEach(t => t.type === 'income' ? income += t.amount : expense += t.amount);
+  return { income, expense, net: income - expense };
 }
 
 function periodLabel() {
@@ -1022,6 +1049,7 @@ function toggleBalanceVisibility() {
 /* ---------- Budget & Goals ---------- */
 function renderBudget() {
   const isBudget = state.budgetTab === 'budget';
+  const monthlyIncome = getPeriodTotals('thisMonth').income; // Get this month's income for percentage calculation
   let cardsHtml = '';
 
   if (isBudget) {
@@ -1036,7 +1064,14 @@ function renderBudget() {
     });
     
     cardsHtml = `<div class="grid2">` + sortedCats.map(cat => {
-      const budget = state.budgets[cat];
+      let budget;
+      if (state.budgetMode === 'percentage') {
+        const pct = state.budgetsPercentage[cat] || 0;
+        budget = (monthlyIncome * pct) / 100;
+      } else {
+        budget = state.budgets[cat];
+      }
+      
       const spent = spentByCat(cat);
       const remaining = budget - spent;
       const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
@@ -1140,9 +1175,15 @@ function saveEditBudget() {
   const oldCat = state.editBudgetData.cat;
   const newName = nameInput.value.trim();
   const newAmount = parseFloat(amountInput.value);
+  const isPercentage = state.budgetMode === 'percentage';
   
   if (!newName || !newAmount || newAmount < 0) {
-    showToast('Please enter a valid name and amount', 'error', 3000);
+    showToast(`Please enter a valid name and ${isPercentage ? 'percentage' : 'amount'}`, 'error', 3000);
+    return;
+  }
+  
+  if (isPercentage && newAmount > 100) {
+    showToast('Percentage cannot exceed 100%', 'error', 3000);
     return;
   }
   
@@ -1155,7 +1196,12 @@ function saveEditBudget() {
       showToast('Budget already exists', 'error', 3000);
       return;
     }
-    state.budgets[newName] = newAmount;
+    if (isPercentage) {
+      state.budgetsPercentage[newName] = newAmount;
+      state.budgets[newName] = 0; // placeholder
+    } else {
+      state.budgets[newName] = newAmount;
+    }
     showToast(`Budget "${newName}" created!`, 'success', 2500);
   } else {
     // Editing existing budget
@@ -1165,10 +1211,19 @@ function saveEditBudget() {
         showToast('Budget name already exists', 'error', 3000);
         return;
       }
-      state.budgets[newName] = newAmount;
+      if (isPercentage) {
+        state.budgetsPercentage[newName] = newAmount;
+        delete state.budgetsPercentage[oldCat];
+      } else {
+        state.budgets[newName] = newAmount;
+      }
       delete state.budgets[oldCat];
     } else {
-      state.budgets[oldCat] = newAmount;
+      if (isPercentage) {
+        state.budgetsPercentage[oldCat] = newAmount;
+      } else {
+        state.budgets[oldCat] = newAmount;
+      }
     }
     showToast(`Budget updated!`, 'success', 2500);
   }
@@ -1183,6 +1238,8 @@ function renderEditBudgetModal() {
   if (!data) return '';
   
   const isNewBudget = !Object.keys(state.budgets).includes(data.cat);
+  const isPercentage = state.budgetMode === 'percentage';
+  const pctValue = state.budgetsPercentage[data.cat] || 0;
   
   return `
   <div class="modal-overlay">
@@ -1193,8 +1250,11 @@ function renderEditBudgetModal() {
         <input type="text" id="edit-budget-name" value="${escapeHtml(data.name)}" placeholder="e.g. Shopping">
       </div>
       <div class="field">
-        <div class="field-label">Budget Amount</div>
-        <div class="amount-wrap"><span>${cur()}</span><input type="number" id="edit-budget-amount" value="${data.amount}" placeholder="0.00"></div>
+        <div class="field-label">${isPercentage ? 'Percentage of Income' : 'Budget Amount'}</div>
+        ${isPercentage ? 
+          `<div style="display:flex;align-items:center;gap:8px;"><input type="number" id="edit-budget-amount" value="${pctValue}" placeholder="0" min="0" max="100" style="flex:1;"><span style="font-weight:600;">%</span></div>` :
+          `<div class="amount-wrap"><span>${cur()}</span><input type="number" id="edit-budget-amount" value="${data.amount}" placeholder="0.00"></div>`
+        }
       </div>
       <div class="modal-btn-row">
         <button class="cancel" onclick="closeEditBudget()">Cancel</button>
@@ -1477,6 +1537,11 @@ function renderAccount() {
       ${ICON.chevron}
     </div>
     
+    <div class="s-row">
+      <span>Budget mode: <strong>${state.budgetMode === 'fixed' ? 'Fixed Monthly' : 'Income-Based %'}</strong></span>
+      <button class="switch ${state.budgetMode === 'percentage' ? 'on' : ''}" onclick="toggleBudgetMode()"><span class="knob"></span></button>
+    </div>
+    
     <div class="s-row danger" onclick="resetData()"><span>Reset all data</span>${ICON.trash}</div>
   </div>
   `;
@@ -1485,6 +1550,10 @@ function renderAccount() {
 function updateName(v) { state.userName = v.trim() || 'User'; }
 function toggleNotifications() { state.notificationsOn = !state.notificationsOn; render(); }
 function toggleBalanceHidden() { state.balanceHidden = !state.balanceHidden; render(); }
+function toggleBudgetMode() { 
+  state.budgetMode = state.budgetMode === 'fixed' ? 'percentage' : 'fixed';
+  render();
+}
 
 function openStartingBalanceEditor() {
   state.editBalanceInput = state.startingBalance.toString();
