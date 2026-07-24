@@ -1399,11 +1399,9 @@ function openAddBudget() {
 }
 
 function deleteBudget(cat) {
-  if (confirm(`Delete budget "${cat}"? Transactions in this category will have their category cleared.`)) {
+  if (confirm(`Delete budget "${cat}"?`)) {
     delete state.budgets[cat];
     delete state.budgetsPercentage[cat];
-    // Remove the category from any transactions that used it
-    state.txns.forEach(t => { if (t.cat === cat) t.cat = ''; });
     // Clear bank filter if it was set to this category
     if (state.bankFilterCat === cat) state.bankFilterCat = null;
     // Clear form cat if it was set to this category
@@ -1806,10 +1804,12 @@ function renderAddTxn() {
 
   let bodyExtra = '';
   if (isExpense) {
-    // All categories come from budgets + Subscription. Split into primary (first 5) and rest.
-    const allBudgetCats = Object.keys(state.budgets);
-    const primaryCats = allBudgetCats.slice(0, 5);
-    const moreCats = allBudgetCats.slice(5);
+    // Merge budget cats + cats that exist in transactions (so deleting a budget doesn't lose history)
+    const budgetCats = Object.keys(state.budgets);
+    const txnCats = [...new Set(state.txns.filter(t => t.type === 'expense' && t.cat && t.cat !== 'Subscription').map(t => t.cat))];
+    const allCats = [...new Set([...budgetCats, ...txnCats])];
+    const primaryCats = allCats.slice(0, 5);
+    const moreCats = allCats.slice(5);
     const hasMore = moreCats.length > 0;
     
     bodyExtra = `
