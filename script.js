@@ -29,7 +29,24 @@ const ICON = {
 const CAT_ICON = {
   'Shopping': 'bag', 'Eating Out': 'food', 'Fuel': 'fuel', 'Groceries': 'cart', 'Gifts': 'gift', 'Misc': 'misc',
   'Salary': 'cash', 'Freelance': 'cash', 'Gift': 'gift', 'Refund': 'cash', 'Reimburse': 'cash', 'Other': 'misc',
-  'Health': 'heart', 'Transport': 'fuel'
+  'Health': 'heart', 'Transport': 'fuel', 'Subscription': 'subscription'
+};
+
+const CAT_COLOR = {
+  'Shopping':     '#a855f7',
+  'Eating Out':   '#f59e0b',
+  'Groceries':    '#22c55e',
+  'Health':       '#ef4444',
+  'Transport':    '#3b82f6',
+  'Gifts':        '#ec4899',
+  'Misc':         '#6b7280',
+  'Subscription': '#06b6d4',
+  'Salary':       '#10b981',
+  'Freelance':    '#10b981',
+  'Refund':       '#10b981',
+  'Gift':         '#ec4899',
+  'Reimburse':    '#10b981',
+  'Other':        '#6b7280',
 };
 
 function lotusSVG(w = 90) {
@@ -144,6 +161,11 @@ let state = {
   userAvatar: null,
   budgetMode: 'fixed',
   budgetsPercentage: {},
+  selectedTxnId: null,
+  unlockedBadges: [],
+  badgeDates: {},
+  firstLogin: true,
+  selectedBadgeId: null,
   subscriptions: [
     { id: 1, name: 'Netflix',      amount: 22.99, cycle: 'monthly', cat: 'Entertainment', color: '#E50914', emoji: '🎬' },
     { id: 2, name: 'Spotify',      amount: 11.99, cycle: 'monthly', cat: 'Entertainment', color: '#1DB954', emoji: '🎵' },
@@ -268,6 +290,8 @@ function render() {
   else if (state.screen === 'account') html = renderAccount();
   else if (state.screen === 'addTxn') html = renderAddTxn();
   else if (state.screen === 'subscriptions') html = renderSubscriptions();
+  else if (state.screen === 'txnDetail') html = renderTxnDetail();
+  else if (state.screen === 'achievements') html = renderAchievements();
 
   // Only add page-enter animation when screen changes
   if (state.screen !== lastScreen) {
@@ -288,6 +312,7 @@ function render() {
   if (state.showProfileEditor) modalHtml += renderProfileEditorModal();
   if (state.showAddSub) modalHtml += renderAddSubModal();
   if (state.showEditSub) modalHtml += renderEditSubModal();
+  if (state.selectedBadgeId) modalHtml += renderBadgeModal();
 
   // Get or create modal container
   let modalContainer = phone.querySelector('#modal-container');
@@ -301,7 +326,7 @@ function render() {
   // Lock scroll when modal is open
   const hasModal = state.showWarning || state.showEditBudget || state.showEditGoal || 
                    state.showAddGoal || state.showEditBudgets || state.showEditBalance || 
-                   state.showProfileEditor || state.showAddSub || state.showEditSub;
+                   state.showProfileEditor || state.showAddSub || state.showEditSub || !!state.selectedBadgeId;
   
   c.style.overflow = hasModal ? 'hidden' : 'scroll';
 
@@ -440,7 +465,7 @@ function renderHome() {
     </div>
     <div style="display:flex;gap:4px;margin-bottom:14px;">
       <button class="graph-btn ${state.graphType === 'category' ? 'active' : ''}" onclick="setGraphType('category')" style="font-size:11px;">Category</button>
-      <button class="graph-btn ${state.graphType === 'trend' ? 'active' : ''}" onclick="setGraphType('trend')" style="font-size:11px;">Monthly</button>
+      <button class="graph-btn ${state.graphType === 'trend' ? 'active' : ''}" onclick="setGraphType('trend')" style="font-size:11px;">Safe to Spend</button>
       <button class="graph-btn ${state.graphType === 'income' ? 'active' : ''}" onclick="setGraphType('income')" style="font-size:11px;">Income vs Expense</button>
     </div>
     ${renderCombinedAnalysis()}
@@ -460,81 +485,120 @@ function renderCombinedAnalysis() {
   let topSection = '';
   if (state.graphType === 'category') {
     const spentByCategory = {};
-    filteredTxns.filter(t => t.type === 'expense').forEach(t => {
+    const countByCategory = {};
+    const expenseTxns = filteredTxns.filter(t => t.type === 'expense');
+    expenseTxns.forEach(t => {
       spentByCategory[t.cat] = (spentByCategory[t.cat] || 0) + t.amount;
+      countByCategory[t.cat] = (countByCategory[t.cat] || 0) + 1;
     });
     
+    const totalExpense = expenseTxns.reduce((s, t) => s + t.amount, 0);
     const sorted = Object.entries(spentByCategory).sort((a, b) => b[1] - a[1]);
-    const colors = ['#7fb98a', '#f5a962', '#e2a99a', '#a8d5ba', '#ffc9a3', '#d4a5a5', '#b8c5d6'];
     
-    topSection = '<div class="graph-bars">';
-    sorted.slice(0, 7).forEach((entry, i) => {
-      const [cat, spent] = entry;
-      const maxSpent = Math.max(...sorted.map(e => e[1]));
-      const pct = (spent / maxSpent) * 100;
+    topSection = '<div style="display:flex;flex-direction:column;gap:4px;">';
+    sorted.slice(0, 7).forEach(([cat, spent]) => {
+      const pct = totalExpense > 0 ? Math.round((spent / totalExpense) * 100) : 0;
+      const barPct = totalExpense > 0 ? (spent / totalExpense) * 100 : 0;
+      const count = countByCategory[cat];
+      const color = CAT_COLOR[cat] || '#6b7280';
+      const iconKey = CAT_ICON[cat] || 'misc';
       topSection += `
-      <div class="graph-bar-item">
-        <div class="graph-bar-label" style="font-size:14px;">${cat}</div>
-        <div class="graph-bar-track">
-          <div class="graph-bar-fill" style="width:${pct}%;background:${colors[i % colors.length]};"></div>
+      <div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:7px;">
+          <div style="width:34px;height:34px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:${color};">${ICON[iconKey]}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;">${cat || 'Uncategorised'}</div>
+            <div style="font-size:11px;color:var(--cream-dim);">${count} transaction${count !== 1 ? 's' : ''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:13px;font-weight:700;">-${cur()}${fmt(spent)}</div>
+            <div style="font-size:11px;color:var(--cream-dim);">${pct}%</div>
+          </div>
         </div>
-        <div class="graph-bar-val" style="font-size:14px;">${cur()}${fmt(spent)}</div>
+        <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;margin-left:46px;">
+          <div class="progress-fill" data-target="${barPct.toFixed(1)}%" style="height:100%;background:${color};border-radius:3px;opacity:0.8;"></div>
+        </div>
       </div>`;
     });
     topSection += '</div>';
   } else if (state.graphType === 'trend') {
-    // Monthly income vs expense grouped bars — last 6 months
-    const monthMap = {};
-    const allTxns = state.txns; // always show last 6 months regardless of period filter
-    allTxns.forEach(tx => {
-      const date = new Date(tx.date + 'T00:00:00');
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthMap[key]) monthMap[key] = { income: 0, expense: 0 };
-      tx.type === 'income' ? monthMap[key].income += tx.amount : monthMap[key].expense += tx.amount;
-    });
-    
-    // Last 6 months sorted oldest → newest
     const now = new Date();
-    const last6 = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleDateString('en-US', { month: 'short' });
-      last6.push({ key, label, income: monthMap[key]?.income || 0, expense: monthMap[key]?.expense || 0 });
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayDay = now.getDate();
+    const daysLeft = daysInMonth - todayDay;
+
+    // This month's income and expenses
+    const monthTxns = state.txns.filter(t => {
+      const d = new Date(t.date + 'T00:00:00');
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
+    const monthIncome = monthTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const monthExpense = monthTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const goalsSaved = state.goals.reduce((s, g) => s + g.saved, 0);
+
+    // Safe to spend = balance - goal savings - upcoming bills estimate
+    const t = totals();
+    const safeToSpend = Math.max(0, t.balance - goalsSaved);
+    const dailySafe = daysLeft > 0 ? safeToSpend / daysLeft : 0;
+
+    // Weekly spending bars (last 5 weeks)
+    const weeks = [];
+    for (let w = 4; w >= 0; w--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - (w * 7) - now.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const label = w === 0 ? 'This wk' : w === 1 ? 'Last wk' : weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+      const spent = state.txns.filter(t => {
+        const d = new Date(t.date + 'T00:00:00');
+        return t.type === 'expense' && d >= weekStart && d <= weekEnd;
+      }).reduce((s, t) => s + t.amount, 0);
+      weeks.push({ label, spent, isCurrent: w === 0 });
     }
-    
-    const maxVal = Math.max(...last6.flatMap(m => [m.income, m.expense]), 1);
-    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    
+    const maxWeekSpend = Math.max(...weeks.map(w => w.spent), 1);
+    const avgWeekly = weeks.slice(0, 4).reduce((s, w) => s + w.spent, 0) / 4;
+
     topSection = `
-    <div style="display:flex;align-items:flex-end;gap:6px;height:110px;margin-bottom:8px;">
-      ${last6.map(m => {
-        const inPct = Math.max(4, (m.income / maxVal) * 100);
-        const exPct = Math.max(4, (m.expense / maxVal) * 100);
-        const isCurrent = m.key === currentKey;
-        return `
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
-          <div style="flex:1;display:flex;align-items:flex-end;gap:2px;width:100%;">
-            <div style="flex:1;height:${inPct}%;background:rgba(127,185,138,${isCurrent ? '0.9' : '0.5'});border-radius:3px 3px 0 0;min-height:4px;"></div>
-            <div style="flex:1;height:${exPct}%;background:rgba(201,107,92,${isCurrent ? '0.9' : '0.5'});border-radius:3px 3px 0 0;min-height:4px;"></div>
-          </div>
+    <!-- Safe to Spend card -->
+    <div style="background:rgba(127,185,138,0.12);border:1px solid rgba(127,185,138,0.25);border-radius:14px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--cream-dim);margin-bottom:2px;">Safe to spend</div>
+      <div style="font-size:30px;font-weight:700;color:${safeToSpend < 500 ? '#ef4444' : 'var(--income)'};">${cur()}${fmt(safeToSpend)}</div>
+      <div style="font-size:11px;color:var(--cream-dim);margin-top:4px;">${cur()}${fmt(dailySafe.toFixed(0))}/day · ${daysLeft} days left this month</div>
+      <div style="display:flex;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:10px;color:var(--cream-dim);">Earned</div>
+          <div style="font-size:13px;font-weight:600;color:var(--income);">+${cur()}${fmt(monthIncome)}</div>
+        </div>
+        <div style="width:1px;background:rgba(255,255,255,0.08);"></div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:10px;color:var(--cream-dim);">Spent</div>
+          <div style="font-size:13px;font-weight:600;color:var(--expense);">-${cur()}${fmt(monthExpense)}</div>
+        </div>
+        <div style="width:1px;background:rgba(255,255,255,0.08);"></div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:10px;color:var(--cream-dim);">In Goals</div>
+          <div style="font-size:13px;font-weight:600;color:var(--cream);">${cur()}${fmt(goalsSaved)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weekly spending bars -->
+    <div style="font-size:12px;font-weight:600;margin-bottom:10px;">Weekly Spending</div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:80px;margin-bottom:6px;">
+      ${weeks.map(w => {
+        const pct = Math.max(6, (w.spent / maxWeekSpend) * 100);
+        const isOver = w.spent > avgWeekly * 1.2;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;height:100%;justify-content:flex-end;">
+          <div style="width:100%;height:${pct}%;background:${isOver ? 'rgba(201,107,92,0.7)' : w.isCurrent ? 'rgba(127,185,138,0.9)' : 'rgba(127,185,138,0.45)'};border-radius:4px 4px 0 0;min-height:4px;"></div>
         </div>`;
       }).join('')}
     </div>
-    <div style="display:flex;gap:6px;">
-      ${last6.map(m => {
-        const isCurrent = m.key === currentKey;
-        return `<div style="flex:1;text-align:center;font-size:9px;color:${isCurrent ? 'var(--cream)' : 'var(--cream-dim)'};font-weight:${isCurrent ? '600' : '400'};">${m.label}</div>`;
-      }).join('')}
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+      ${weeks.map(w => `<div style="flex:1;text-align:center;font-size:9px;color:${w.isCurrent ? 'var(--cream)' : 'var(--cream-dim)'};font-weight:${w.isCurrent ? '600' : '400'};overflow:hidden;">${w.label}</div>`).join('')}
     </div>
-    <div style="display:flex;gap:12px;margin-top:10px;">
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--cream-dim);">
-        <div style="width:10px;height:10px;border-radius:2px;background:rgba(127,185,138,0.7);"></div>Income
-      </div>
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--cream-dim);">
-        <div style="width:10px;height:10px;border-radius:2px;background:rgba(201,107,92,0.7);"></div>Expense
-      </div>
-    </div>`;
+    <div style="font-size:11px;color:var(--cream-dim);">Avg/week: <strong style="color:var(--cream)">${cur()}${fmt(avgWeekly)}</strong> · Red = above average</div>`;
   } else if (state.graphType === 'income') {
     const income = filteredTxns.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0);
     const expense = filteredTxns.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
@@ -926,14 +990,16 @@ function renderBank() {
         listHtml += `<div class="txn-date-row">${dmy(tx.date)}</div>`;
         lastDate = tx.date;
       }
-      const icon = ICON[CAT_ICON[tx.cat] || 'misc'];
+      const iconKey = CAT_ICON[tx.cat] || 'misc';
+      const icon = ICON[iconKey];
+      const color = CAT_COLOR[tx.cat] || (tx.type === 'income' ? '#10b981' : '#6b7280');
       listHtml += `
-      <button class="txn-row" style="animation-delay:${Math.min(i * 0.03, .4)}s" onclick="deleteTxnConfirm(${tx.id})">
+      <button class="txn-row" style="animation-delay:${Math.min(i * 0.03, .4)}s" onclick="openTxnDetail(${tx.id})">
         <div class="txn-left">
-          <div class="txn-icon">${icon}</div>
+          <div class="txn-icon" style="background:${color}20;color:${color};">${icon}</div>
           <div>
             <div class="txn-desc">${escapeHtml(tx.desc || tx.cat)}</div>
-            <div class="txn-cat">${tx.cat}</div>
+            <div class="txn-cat">${tx.cat || 'Uncategorised'}</div>
           </div>
         </div>
         <div class="txn-amt ${tx.type}">${tx.type === 'income' ? '+' : '-'}${cur()}${fmt(tx.amount)}</div>
@@ -994,7 +1060,7 @@ function renderBank() {
     </div>
   </div>
   <div class="txn-list">${listHtml}</div>
-  <div style="margin-top:24px;text-align:center;" class="dim">Tap a transaction to delete it</div>
+  <div style="margin-top:24px;text-align:center;" class="dim">Tap a transaction to view details</div>
   `;
 }
 
@@ -1229,10 +1295,12 @@ function renderBudget() {
     cardsHtml = summaryCard + `<div class="grid2">` + sortedGoals.map(g => {
       const pct = g.goal > 0 ? Math.round((g.saved / g.goal) * 100) : 0;
       const remaining = Math.max(0, g.goal - g.saved);
+      const plant = goalPlantSVG(pct);
       return `
       <div class="b-card goal-card" onclick="openEditGoal(${g.id})">
         <div class="b-name">${escapeHtml(g.name)}</div>
         <button class="b-card-delete" onclick="deleteGoal(${g.id}); event.stopPropagation();">${ICON.trash}</button>
+        <div style="display:flex;justify-content:center;margin:6px 0;">${plant}</div>
         <div class="b-stats-row"><span>Goal:</span><span>Saved</span></div>
         <div class="b-stats-row" style="margin-top:-2px;">
           <span class="b-stats-val">${cur()}${fmt(g.goal)}</span>
@@ -1649,6 +1717,7 @@ function renderAccount() {
   </div>
   <div class="card settings-list">
     <div class="s-row clickable" onclick="goTo('subscriptions')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.subscription}</span> Subscriptions</span>${ICON.chevron}</div>
+    <div class="s-row clickable" onclick="goTo('achievements')"><span>🏅 Achievements</span>${ICON.chevron}</div>
     <div class="s-row clickable" onclick="openStartingBalanceEditor()"><span>Starting balance: <strong>${cur()}${fmt(state.startingBalance)}</strong></span>${ICON.chevron}</div>
     
     <div class="s-row">
@@ -2060,31 +2129,44 @@ function saveTxn() {
   
   state.txns.push(txn);
 
-  // Only check budget warnings for expense transactions
+  // Only check budget warnings for the category of this transaction
   state.warningItems = [];
-  if (f.type === 'expense') {
-    Object.keys(state.budgets).forEach(cat => {
-      const budget = state.budgets[cat];
-      const spent = spentByCat(cat);
-      const pct = Math.round((spent / budget) * 100);
-      if (spent > budget) {
-        state.warningItems.push({ type: 'over', text: `${cat} — You're ${cur()}${fmt(spent - budget)} over budget` });
-      } else if (pct >= 85) {
-        state.warningItems.push({ type: 'warn', text: `${cat} — ${pct}% of budget used` });
-      }
-    });
+  if (f.type === 'expense' && f.cat && state.budgets[f.cat]) {
+    const budget = state.budgets[f.cat];
+    const spent = spentByCat(f.cat);
+    const pct = Math.round((spent / budget) * 100);
+    if (spent > budget) {
+      state.warningItems.push({ type: 'over', text: `${f.cat} — You're ${cur()}${fmt(spent - budget)} over budget` });
+    } else if (pct >= 85) {
+      state.warningItems.push({ type: 'warn', text: `${f.cat} — ${pct}% of budget used` });
+    }
   }
 
   state.screen = 'home';
   setPhoneTheme('neutral');
   
-  // Show toasts instead of modal
+  // Check for completed goals from splits
+  if (f.type === 'income' && f.splitGoals) {
+    f.splitGoals.forEach(s => {
+      const g = state.goals.find(g => g.id === s.goalId);
+      if (g && g.saved >= g.goal && g.saved - ((txn.amount * parseFloat(s.pct)) / 100) < g.goal) {
+        setTimeout(() => {
+          showToast(`🎉 Goal complete! "${g.name}" is fully funded!`, 'success', 4000);
+        }, 800);
+      }
+    });
+  }
+
+  // Show toasts
   showToast(`${f.type === 'income' ? 'Income' : 'Expense'} added!`, 'success', 2000);
   state.warningItems.forEach(item => {
     setTimeout(() => {
       showToast(item.text, item.type === 'over' ? 'error' : 'info', 3000);
     }, 500);
   });
+
+  // Check achievements
+  setTimeout(() => checkAchievements(), 600);
   
   render();
 }
@@ -2115,6 +2197,270 @@ function goTo(screen) {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+function goalPlantSVG(pct) {
+  // 5 stages: seed (0-20), sprout (20-40), seedling (40-60), plant (60-85), blooming (85-100+)
+  const green = 'rgba(127,185,138,';
+  const stem = `<line x1="32" y1="52" x2="32" y2="60" stroke="${green}0.9)" stroke-width="2" stroke-linecap="round"/>`;
+  const soil = `<ellipse cx="32" cy="60" rx="14" ry="4" fill="${green}0.25)"/>`;
+
+  let plant = '';
+  if (pct < 20) {
+    // Seed — just a little bump
+    plant = `<circle cx="32" cy="56" r="4" fill="${green}0.5)"/>`;
+  } else if (pct < 40) {
+    // Sprout — tiny stem + 1 leaf
+    plant = `
+      <line x1="32" y1="48" x2="32" y2="58" stroke="${green}0.8)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M32 50 Q24 44 26 38 Q32 42 32 50Z" fill="${green}0.7)"/>`;
+  } else if (pct < 60) {
+    // Seedling — taller stem + 2 leaves
+    plant = `
+      <line x1="32" y1="40" x2="32" y2="58" stroke="${green}0.8)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M32 50 Q22 44 24 36 Q32 40 32 50Z" fill="${green}0.7)"/>
+      <path d="M32 46 Q42 40 40 32 Q32 36 32 46Z" fill="${green}0.6)"/>`;
+  } else if (pct < 85) {
+    // Plant — full stem + 3 leaves
+    plant = `
+      <line x1="32" y1="32" x2="32" y2="58" stroke="${green}0.85)" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M32 52 Q20 46 22 36 Q32 40 32 52Z" fill="${green}0.75)"/>
+      <path d="M32 46 Q44 40 42 30 Q32 34 32 46Z" fill="${green}0.65)"/>
+      <path d="M32 40 Q22 30 26 20 Q34 28 32 40Z" fill="${green}0.75)"/>`;
+  } else {
+    // Blooming — full plant with flower
+    plant = `
+      <line x1="32" y1="30" x2="32" y2="58" stroke="${green}0.9)" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M32 52 Q20 46 22 36 Q32 40 32 52Z" fill="${green}0.75)"/>
+      <path d="M32 46 Q44 40 42 30 Q32 34 32 46Z" fill="${green}0.7)"/>
+      <path d="M32 38 Q22 28 26 18 Q34 26 32 38Z" fill="${green}0.8)"/>
+      <circle cx="32" cy="26" r="5" fill="rgba(245,169,98,0.9)"/>
+      <circle cx="32" cy="20" r="3" fill="rgba(245,210,98,0.95)"/>
+      <circle cx="37" cy="24" r="2.5" fill="rgba(245,169,98,0.85)"/>
+      <circle cx="27" cy="24" r="2.5" fill="rgba(245,169,98,0.85)"/>`;
+  }
+
+  return `<svg viewBox="0 0 64 64" width="48" height="48" style="overflow:visible;">${soil}${stem}${plant}</svg>`;
+}
+
+/* ================= ACHIEVEMENTS ================= */
+
+const ALL_BADGES = [
+  // 🌱 Getting Started
+  { id: 'first_login',       cat: 'Getting Started', icon: '🌱', name: 'First Sprout',         desc: 'Welcome to Sprout!',                          check: s => true },
+  { id: 'first_txn',        cat: 'Getting Started', icon: '✍️', name: 'First Entry',           desc: 'Log your first transaction',                  check: s => s.txns.length >= 1 },
+  { id: 'first_expense',    cat: 'Getting Started', icon: '💸', name: 'First Expense',         desc: 'Log your first expense',                      check: s => s.txns.some(t => t.type === 'expense') },
+  { id: 'first_income',     cat: 'Getting Started', icon: '💰', name: 'First Income',          desc: 'Log your first income',                       check: s => s.txns.some(t => t.type === 'income') },
+  { id: 'first_goal',       cat: 'Getting Started', icon: '🎯', name: 'Dream Big',             desc: 'Create your first goal',                      check: s => s.goals.length >= 1 },
+  { id: 'first_budget',     cat: 'Getting Started', icon: '📋', name: 'Budget Setter',         desc: 'Set your first budget',                       check: s => Object.keys(s.budgets).length >= 1 },
+  { id: 'named_yourself',   cat: 'Getting Started', icon: '👤', name: 'Identity',              desc: 'Add your name',                               check: s => s.userName && s.userName !== 'Alex' },
+  { id: 'added_avatar',     cat: 'Getting Started', icon: '🖼️', name: 'Face to a Name',        desc: 'Upload a profile picture',                    check: s => !!s.userAvatar },
+  { id: 'set_balance',      cat: 'Getting Started', icon: '🏦', name: 'Foundation',            desc: 'Set your starting balance',                   check: s => s.startingBalance > 0 },
+  { id: 'first_sub',        cat: 'Getting Started', icon: '📺', name: 'Subscription Aware',    desc: 'Add your first subscription',                 check: s => (s.subscriptions || []).length >= 1 },
+
+  // 📊 Transactions
+  { id: 'txn_5',            cat: 'Transactions', icon: '📝', name: 'Getting Tracked',       desc: 'Log 5 transactions',                          check: s => s.txns.length >= 5 },
+  { id: 'txn_10',           cat: 'Transactions', icon: '📓', name: 'On a Roll',             desc: 'Log 10 transactions',                         check: s => s.txns.length >= 10 },
+  { id: 'txn_25',           cat: 'Transactions', icon: '📒', name: 'Consistent Logger',     desc: 'Log 25 transactions',                         check: s => s.txns.length >= 25 },
+  { id: 'txn_50',           cat: 'Transactions', icon: '📗', name: 'Dedicated Tracker',     desc: 'Log 50 transactions',                         check: s => s.txns.length >= 50 },
+  { id: 'txn_100',          cat: 'Transactions', icon: '📘', name: 'Century Logger',        desc: 'Log 100 transactions',                        check: s => s.txns.length >= 100 },
+  { id: 'txn_250',          cat: 'Transactions', icon: '📙', name: 'Finance Historian',     desc: 'Log 250 transactions',                        check: s => s.txns.length >= 250 },
+  { id: 'txn_500',          cat: 'Transactions', icon: '📚', name: 'Chronicle Master',      desc: 'Log 500 transactions',                        check: s => s.txns.length >= 500 },
+  { id: 'cat_all',          cat: 'Transactions', icon: '🌈', name: 'Category Explorer',     desc: 'Use all budget categories',                   check: s => Object.keys(s.budgets).every(c => s.txns.some(t => t.cat === c)) },
+  { id: 'big_spend',        cat: 'Transactions', icon: '💳', name: 'Big Ticket',            desc: 'Log a single expense over $500',              check: s => s.txns.some(t => t.type === 'expense' && t.amount >= 500) },
+  { id: 'big_income',       cat: 'Transactions', icon: '🤑', name: 'Payday',                desc: 'Log a single income over $5,000',             check: s => s.txns.some(t => t.type === 'income' && t.amount >= 5000) },
+  { id: 'big_income2',      cat: 'Transactions', icon: '💎', name: 'Windfall',              desc: 'Log a single income over $20,000',            check: s => s.txns.some(t => t.type === 'income' && t.amount >= 20000) },
+  { id: 'sub_expense',      cat: 'Transactions', icon: '🔁', name: 'Subscription Tracked',  desc: 'Log a subscription expense',                  check: s => s.txns.some(t => t.cat === 'Subscription') },
+  { id: 'income_split',     cat: 'Transactions', icon: '🍕', name: 'Smart Splitter',        desc: 'Split income across multiple goals',          check: s => s.txns.some(t => t.splitGoals && t.splitGoals.length > 1) },
+
+  // 🎯 Goals
+  { id: 'goal_1_done',      cat: 'Goals', icon: '⭐', name: 'Goal Getter',           desc: 'Complete your first goal',                    check: s => s.goals.some(g => g.saved >= g.goal) },
+  { id: 'goal_3_done',      cat: 'Goals', icon: '🌟', name: 'Triple Threat',         desc: 'Complete 3 goals',                            check: s => s.goals.filter(g => g.saved >= g.goal).length >= 3 },
+  { id: 'goal_5_done',      cat: 'Goals', icon: '💫', name: 'Goal Machine',          desc: 'Complete 5 goals',                            check: s => s.goals.filter(g => g.saved >= g.goal).length >= 5 },
+  { id: 'goal_10_done',     cat: 'Goals', icon: '🏆', name: 'Champion',              desc: 'Complete 10 goals',                           check: s => s.goals.filter(g => g.saved >= g.goal).length >= 10 },
+  { id: 'goal_20_done',     cat: 'Goals', icon: '👑', name: 'Goal Royalty',          desc: 'Complete 20 goals',                           check: s => s.goals.filter(g => g.saved >= g.goal).length >= 20 },
+  { id: 'goal_3_active',    cat: 'Goals', icon: '🎪', name: 'Multitasker',           desc: 'Have 3 active goals at once',                 check: s => s.goals.length >= 3 },
+  { id: 'goal_5_active',    cat: 'Goals', icon: '🎠', name: 'Ambitious',             desc: 'Have 5 active goals at once',                 check: s => s.goals.length >= 5 },
+  { id: 'goal_big',         cat: 'Goals', icon: '🏔️', name: 'Dream Big',             desc: 'Set a goal over $10,000',                     check: s => s.goals.some(g => g.goal >= 10000) },
+  { id: 'goal_bigger',      cat: 'Goals', icon: '🚀', name: 'Sky High',              desc: 'Set a goal over $50,000',                     check: s => s.goals.some(g => g.goal >= 50000) },
+  { id: 'goal_100pct',      cat: 'Goals', icon: '💯', name: 'Perfectionist',         desc: 'A goal reaches exactly 100%',                 check: s => s.goals.some(g => g.goal > 0 && g.saved === g.goal) },
+  { id: 'goal_over',        cat: 'Goals', icon: '📈', name: 'Overachiever',          desc: 'Save more than your goal target',             check: s => s.goals.some(g => g.saved > g.goal) },
+  { id: 'goal_halfway',     cat: 'Goals', icon: '🌓', name: 'Halfway There',         desc: 'Reach 50% on any goal',                      check: s => s.goals.some(g => g.goal > 0 && g.saved / g.goal >= 0.5) },
+  { id: 'goal_travel',      cat: 'Goals', icon: '✈️', name: 'Wanderlust',            desc: 'Create a travel goal',                        check: s => s.goals.some(g => /trip|travel|holiday|vacation|flight/i.test(g.name)) },
+  { id: 'goal_house',       cat: 'Goals', icon: '🏠', name: 'Home Owner',            desc: 'Create a house/property goal',               check: s => s.goals.some(g => /house|home|property|deposit|mortgage/i.test(g.name)) },
+  { id: 'goal_emergency',   cat: 'Goals', icon: '🛡️', name: 'Safety Net',            desc: 'Create an emergency fund goal',               check: s => s.goals.some(g => /emergency|safety|rainy/i.test(g.name)) },
+
+  // 💰 Savings & Balance
+  { id: 'save_1k',          cat: 'Savings', icon: '💵', name: 'First Thousand',       desc: 'Save $1,000 across goals',                    check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 1000 },
+  { id: 'save_5k',          cat: 'Savings', icon: '💴', name: 'Five Large',           desc: 'Save $5,000 across goals',                    check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 5000 },
+  { id: 'save_10k',         cat: 'Savings', icon: '💶', name: 'Five Figures',         desc: 'Save $10,000 across goals',                   check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 10000 },
+  { id: 'save_50k',         cat: 'Savings', icon: '💷', name: 'Fifty K Club',         desc: 'Save $50,000 across goals',                   check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 50000 },
+  { id: 'save_100k',        cat: 'Savings', icon: '🏅', name: 'Six Figures',          desc: 'Save $100,000 across goals',                  check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 100000 },
+  { id: 'bal_100k',         cat: 'Savings', icon: '🎰', name: 'Centurion',            desc: 'Reach a balance of $100,000',                 check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 100000; } },
+  { id: 'bal_500k',         cat: 'Savings', icon: '🦁', name: 'Half Millionaire',     desc: 'Reach a balance of $500,000',                 check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 500000; } },
+  { id: 'bal_1m',           cat: 'Savings', icon: '🦄', name: 'Millionaire',          desc: 'Reach a balance of $1,000,000',               check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 1000000; } },
+  { id: 'positive_month',   cat: 'Savings', icon: '📗', name: 'In the Green',         desc: 'End a month with more income than expenses',  check: s => { const m={}; s.txns.forEach(t=>{const k=t.date.slice(0,7);if(!m[k])m[k]={i:0,e:0};t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i>v.e); } },
+  { id: 'surplus_1k',       cat: 'Savings', icon: '🌊', name: 'Surplus Hero',         desc: 'Have a monthly surplus over $1,000',          check: s => { const m={}; s.txns.forEach(t=>{const k=t.date.slice(0,7);if(!m[k])m[k]={i:0,e:0};t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i-v.e>=1000); } },
+
+  // 📊 Budgeting
+  { id: 'budget_3',         cat: 'Budgeting', icon: '📂', name: 'Multi-Budget',        desc: 'Set up 3 budgets',                            check: s => Object.keys(s.budgets).length >= 3 },
+  { id: 'budget_5',         cat: 'Budgeting', icon: '📁', name: 'Budget Pro',           desc: 'Set up 5 budgets',                            check: s => Object.keys(s.budgets).length >= 5 },
+  { id: 'budget_7',         cat: 'Budgeting', icon: '🗂️', name: 'Budget Master',        desc: 'Set up 7 budgets',                            check: s => Object.keys(s.budgets).length >= 7 },
+  { id: 'pct_mode',         cat: 'Budgeting', icon: '🔢', name: 'Percentage Thinker',   desc: 'Switch to income-based % budgeting',          check: s => s.budgetMode === 'percentage' },
+  { id: 'under_budget',     cat: 'Budgeting', icon: '✅', name: 'Under Control',        desc: 'Stay under budget in all categories this month', check: s => { const now=new Date(); return Object.keys(s.budgets).length>0 && Object.keys(s.budgets).every(cat=>{ const spent=s.txns.filter(t=>{const d=new Date(t.date+'T00:00:00');return t.type==='expense'&&t.cat===cat&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).reduce((a,t)=>a+t.amount,0); return spent<=s.budgets[cat]; }); } },
+
+  // 🔄 Subscriptions
+  { id: 'sub_3',            cat: 'Subscriptions', icon: '📡', name: 'Subscriber',           desc: 'Track 3 subscriptions',                       check: s => (s.subscriptions||[]).length >= 3 },
+  { id: 'sub_5',            cat: 'Subscriptions', icon: '📻', name: 'Service Collector',    desc: 'Track 5 subscriptions',                       check: s => (s.subscriptions||[]).length >= 5 },
+  { id: 'sub_10',           cat: 'Subscriptions', icon: '📟', name: 'Sub Hoarder',          desc: 'Track 10 subscriptions',                      check: s => (s.subscriptions||[]).length >= 10 },
+  { id: 'sub_100',          cat: 'Subscriptions', icon: '💸', name: 'Sub Spender',          desc: 'Subscription total over $100/month',          check: s => (s.subscriptions||[]).reduce((a,sub)=>{if(sub.cycle==='monthly')return a+sub.amount;if(sub.cycle==='yearly')return a+sub.amount/12;if(sub.cycle==='weekly')return a+sub.amount*4.33;if(sub.cycle==='quarterly')return a+sub.amount/3;return a;},0)>=100 },
+
+  // 🌿 Sprout Milestones
+  { id: 'plant_sprout',     cat: 'Sprout', icon: '🌱', name: 'Little Sprout',        desc: 'Any goal reaches 20%',                        check: s => s.goals.some(g=>g.goal>0&&g.saved/g.goal>=0.2) },
+  { id: 'plant_seedling',   cat: 'Sprout', icon: '🪴', name: 'Growing Strong',       desc: 'Any goal reaches 40%',                        check: s => s.goals.some(g=>g.goal>0&&g.saved/g.goal>=0.4) },
+  { id: 'plant_plant',      cat: 'Sprout', icon: '🌿', name: 'In Full Leaf',         desc: 'Any goal reaches 60%',                        check: s => s.goals.some(g=>g.goal>0&&g.saved/g.goal>=0.6) },
+  { id: 'plant_flowering',  cat: 'Sprout', icon: '🌸', name: 'In Full Bloom',        desc: 'Any goal reaches 85%',                        check: s => s.goals.some(g=>g.goal>0&&g.saved/g.goal>=0.85) },
+  { id: 'plant_complete',   cat: 'Sprout', icon: '🌺', name: 'Full Harvest',         desc: 'Complete a goal',                             check: s => s.goals.some(g=>g.saved>=g.goal) },
+  { id: 'garden_3',         cat: 'Sprout', icon: '🌳', name: 'Small Garden',         desc: 'Have 3 goals at once',                        check: s => s.goals.length >= 3 },
+  { id: 'garden_5',         cat: 'Sprout', icon: '🌲', name: 'Flourishing Garden',   desc: 'Have 5 goals at once',                        check: s => s.goals.length >= 5 },
+  { id: 'garden_10',        cat: 'Sprout', icon: '🌴', name: 'Full Forest',          desc: 'Have 10 goals at once',                       check: s => s.goals.length >= 10 },
+
+  // 🏅 Special
+  { id: 'no_expenses',      cat: 'Special', icon: '🧘', name: 'Spend Nothing Day',    desc: 'Go a day without expenses',                   check: s => { const days={}; s.txns.filter(t=>t.type==='expense').forEach(t=>days[t.date]=true); const all=s.txns.map(t=>t.date); return all.some(d=>!days[d]); } },
+  { id: 'income_3cats',     cat: 'Special', icon: '🎭', name: 'Income Diversified',   desc: 'Have 3 different income categories',          check: s => new Set(s.txns.filter(t=>t.type==='income').map(t=>t.cat)).size >= 3 },
+  { id: 'big_day',          cat: 'Special', icon: '🛍️', name: 'Retail Therapy',       desc: 'Spend over $300 in one day',                  check: s => { const d={}; s.txns.filter(t=>t.type==='expense').forEach(t=>d[t.date]=(d[t.date]||0)+t.amount); return Object.values(d).some(v=>v>=300); } },
+  { id: 'self_control',     cat: 'Special', icon: '🧊', name: 'Self Control',         desc: 'A month where expenses < 50% of income',     check: s => { const m={}; s.txns.forEach(t=>{const k=t.date.slice(0,7);if(!m[k])m[k]={i:0,e:0};t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i>0&&v.e/v.i<0.5); } },
+  { id: 'max_goals',        cat: 'Special', icon: '🌐', name: 'Goal Universe',        desc: 'Complete goals totalling over $100,000',      check: s => s.goals.filter(g=>g.saved>=g.goal).reduce((a,g)=>a+g.goal,0)>=100000 },
+  { id: 'early_bird',       cat: 'Special', icon: '🐦', name: 'Early Bird',           desc: 'Log a transaction before 7am',                check: s => false }, // time not stored
+  { id: 'description_rich', cat: 'Special', icon: '✏️', name: 'Detail Oriented',      desc: 'Add 10 transactions with descriptions',       check: s => s.txns.filter(t=>t.desc&&t.desc.length>3).length >= 10 },
+  { id: 'long_desc',        cat: 'Special', icon: '📝', name: 'Storyteller',          desc: 'Add a transaction with a 20+ char description', check: s => s.txns.some(t=>t.desc&&t.desc.length>=20) },
+  { id: 'split_3way',       cat: 'Special', icon: '🍰', name: 'Three-Way Split',      desc: 'Split income across 3 goals at once',         check: s => s.txns.some(t=>t.splitGoals&&t.splitGoals.length>=3) },
+  { id: 'goal_renamed',     cat: 'Special', icon: '✍️', name: 'Second Thoughts',      desc: 'Edit a goal\'s name',                         check: s => false }, // tracked manually
+  { id: 'full_profile',     cat: 'Special', icon: '💼', name: 'Complete Profile',     desc: 'Add name, bio, and photo',                    check: s => s.userName && s.userBio && s.userAvatar },
+
+  // 💹 Net Worth
+  { id: 'net_pos',          cat: 'Net Worth', icon: '📈', name: 'Positive Net Worth',   desc: 'Balance exceeds all expenses ever',           check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e>0; } },
+  { id: 'income_10k',       cat: 'Net Worth', icon: '💹', name: 'Five Figures Earned',  desc: 'Earn $10,000 total income',                   check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=10000 },
+  { id: 'income_50k',       cat: 'Net Worth', icon: '🏦', name: 'Fifty K Earner',       desc: 'Earn $50,000 total income',                   check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=50000 },
+  { id: 'income_100k',      cat: 'Net Worth', icon: '🌏', name: 'Six Figure Earner',    desc: 'Earn $100,000 total income',                  check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=100000 },
+  { id: 'income_1m',        cat: 'Net Worth', icon: '🚀', name: 'Million Dollar Earner',desc: 'Earn $1,000,000 total income',                check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=1000000 },
+
+  // 🧠 Wisdom
+  { id: 'read_analysis',    cat: 'Wisdom', icon: '🔭', name: 'Data Driven',           desc: 'View all 3 analysis types',                   check: s => false }, // tracked manually
+  { id: 'used_pct_budget',  cat: 'Wisdom', icon: '🧮', name: 'Percentage Master',     desc: 'Set percentages for all budgets',             check: s => s.budgetMode==='percentage' && Object.keys(s.budgets).length>0 && Object.keys(s.budgets).every(c=>s.budgetsPercentage[c]>0) },
+  { id: 'txn_same_day',     cat: 'Wisdom', icon: '⚡', name: 'Productive Day',        desc: 'Log 5 transactions in one day',               check: s => { const d={}; s.txns.forEach(t=>d[t.date]=(d[t.date]||0)+1); return Object.values(d).some(v=>v>=5); } },
+  { id: 'all_cats_budgeted',cat: 'Wisdom', icon: '🎓', name: 'Fully Planned',         desc: 'Have a budget for every category you spend in', check: s => { const cats=new Set(s.txns.filter(t=>t.type==='expense'&&t.cat).map(t=>t.cat)); return [...cats].every(c=>c==='Subscription'||s.budgets[c]); } },
+  { id: 'zero_waste',       cat: 'Wisdom', icon: '♻️', name: 'Zero Waste',            desc: 'All income allocated (100% split to goals)',  check: s => s.txns.some(t=>t.type==='income'&&t.splitGoals&&t.splitGoals.reduce((a,g)=>a+(parseFloat(g.pct)||0),0)===100) },
+
+  // 🎨 Collector
+  { id: 'badge_10',         cat: 'Collector', icon: '🎖️', name: 'Badge Collector',    desc: 'Unlock 10 badges',                            check: s => (s.unlockedBadges||[]).length >= 10 },
+  { id: 'badge_25',         cat: 'Collector', icon: '🏅', name: 'Badge Hunter',       desc: 'Unlock 25 badges',                            check: s => (s.unlockedBadges||[]).length >= 25 },
+  { id: 'badge_50',         cat: 'Collector', icon: '🥇', name: 'Badge Master',       desc: 'Unlock 50 badges',                            check: s => (s.unlockedBadges||[]).length >= 50 },
+  { id: 'badge_all',        cat: 'Collector', icon: '👑', name: 'Hall of Fame',       desc: 'Unlock all achievable badges',                check: s => false },
+];
+
+function checkAchievements() {
+  const newly = [];
+  if (!state.unlockedBadges) state.unlockedBadges = [];
+  if (!state.badgeDates) state.badgeDates = {};
+  
+  ALL_BADGES.forEach(badge => {
+    if (!state.unlockedBadges.includes(badge.id)) {
+      try {
+        if (badge.check(state)) {
+          state.unlockedBadges.push(badge.id);
+          state.badgeDates[badge.id] = new Date().toISOString().slice(0, 10);
+          newly.push(badge);
+        }
+      } catch(e) {}
+    }
+  });
+  if (newly.length > 0) {
+    newly.forEach((badge, i) => {
+      setTimeout(() => showBadgeToast(badge), i * 1200);
+    });
+    saveState();
+  }
+}
+
+function showBadgeToast(badge) {
+  const el = document.createElement('div');
+  el.className = 'toast-badge';
+  el.innerHTML = `<span style="font-size:22px;">${badge.icon}</span><div><div style="font-size:11px;font-weight:700;color:var(--cream);">Badge Unlocked!</div><div style="font-size:12px;font-weight:600;color:var(--income);">${badge.name}</div><div style="font-size:10px;color:var(--cream-dim);">${badge.desc}</div></div>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.classList.add('show'), 50);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 3500);
+}
+
+function renderBadgeModal() {
+  const badge = ALL_BADGES.find(b => b.id === state.selectedBadgeId);
+  if (!badge) return '';
+  const unlocked = (state.unlockedBadges || []).includes(badge.id);
+  const dateStr = state.badgeDates?.[badge.id];
+  const dateFormatted = dateStr ? new Date(dateStr + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+
+  return `
+  <div class="modal-overlay" onclick="state.selectedBadgeId=null;render();">
+    <div class="plain-modal" onclick="event.stopPropagation();" style="text-align:center;">
+      <div style="font-size:52px;margin-bottom:12px;${unlocked ? '' : 'filter:grayscale(1);opacity:0.4;'}">${badge.icon}</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:6px;">${badge.name}</div>
+      <div style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;">${badge.cat}</div>
+      <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="font-size:13px;color:var(--cream);line-height:1.5;">${badge.desc}</div>
+      </div>
+      ${unlocked
+        ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--income);font-weight:600;">
+             ✅ Unlocked ${dateFormatted ? `on ${dateFormatted}` : ''}
+           </div>`
+        : `<div style="font-size:12px;color:var(--cream-dim);">🔒 Not yet unlocked</div>`
+      }
+      <button class="cancel" style="margin-top:16px;width:100%;" onclick="state.selectedBadgeId=null;render();">Close</button>
+    </div>
+  </div>`;
+}
+
+function renderAchievements() {
+  const unlocked = new Set(state.unlockedBadges || []);
+  const cats = [...new Set(ALL_BADGES.map(b => b.cat))];
+  const total = ALL_BADGES.length;
+  const earned = unlocked.size;
+
+  let html = `
+  <div class="form-header">
+    <button class="back-btn" onclick="goTo('account')">${ICON.back} Back</button>
+    <h2>Achievements</h2>
+  </div>
+  <div class="card" style="text-align:center;margin-bottom:14px;">
+    <div style="font-size:28px;font-weight:700;color:var(--income);">${earned} <span style="font-size:16px;color:var(--cream-dim);">/ ${total}</span></div>
+    <div style="font-size:12px;color:var(--cream-dim);margin:4px 0 10px;">badges unlocked</div>
+    <div style="background:rgba(255,255,255,0.08);border-radius:6px;height:8px;overflow:hidden;">
+      <div style="height:100%;width:${((earned/total)*100).toFixed(1)}%;background:rgba(127,185,138,0.8);border-radius:6px;transition:width 1s ease;"></div>
+    </div>
+  </div>`;
+
+  cats.forEach(cat => {
+    const catBadges = ALL_BADGES.filter(b => b.cat === cat);
+    const catEarned = catBadges.filter(b => unlocked.has(b.id)).length;
+    html += `
+    <div style="margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:600;">${cat}</span>
+        <span style="font-size:11px;color:var(--cream-dim);">${catEarned}/${catBadges.length}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;">
+        ${catBadges.map(b => {
+          const isUnlocked = unlocked.has(b.id);
+          return `
+          <button onclick="state.selectedBadgeId='${b.id}';render();" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;background:${isUnlocked ? 'rgba(127,185,138,0.15)' : 'rgba(255,255,255,0.04)'};border:1px solid ${isUnlocked ? 'rgba(127,185,138,0.35)' : 'rgba(255,255,255,0.07)'};border-radius:12px;cursor:pointer;width:100%;">
+            <div style="font-size:24px;${isUnlocked ? '' : 'filter:grayscale(1);opacity:0.3;'}">${b.icon}</div>
+            <div style="font-size:9px;text-align:center;font-weight:${isUnlocked ? '600' : '400'};color:${isUnlocked ? 'var(--cream)' : 'var(--cream-dim)'};line-height:1.2;">${b.name}</div>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+
+  return html + `<div style="height:20px;"></div>`;
 }
 
 /* ================= SUBSCRIPTIONS ================= */
@@ -2425,6 +2771,108 @@ function renderEditSubModal() {
   </div>`;
 }
 
+/* ================= TRANSACTION DETAIL ================= */
+
+function openTxnDetail(id) {
+  state.selectedTxnId = id;
+  state.prevScreen = state.screen;
+  state.screen = 'txnDetail';
+  render();
+}
+
+function renderTxnDetail() {
+  const tx = state.txns.find(t => t.id === state.selectedTxnId);
+  if (!tx) { goTo('bank'); return ''; }
+
+  const color = CAT_COLOR[tx.cat] || (tx.type === 'income' ? '#10b981' : '#6b7280');
+  const iconKey = CAT_ICON[tx.cat] || 'misc';
+  const isExpense = tx.type === 'expense';
+
+  // Total spent on same description
+  const matchingTxns = state.txns.filter(t => t.desc?.toLowerCase() === tx.desc?.toLowerCase() && t.type === tx.type);
+  const totalWithMerchant = matchingTxns.reduce((s, t) => s + t.amount, 0);
+
+  // Goal info if income split
+  const goalSplitInfo = tx.splitGoals?.filter(s => s.goalId)
+    .map(s => {
+      const g = state.goals.find(g => g.id === s.goalId);
+      return g ? `${g.name} (${s.pct}% · ${cur()}${fmt(tx.amount * parseFloat(s.pct) / 100)})` : null;
+    }).filter(Boolean) || [];
+
+  // Budget info for expense
+  const budget = isExpense && tx.cat ? state.budgets[tx.cat] : null;
+  const spentInCat = isExpense && tx.cat ? state.txns.filter(t => {
+    const now = new Date();
+    const d = new Date(t.date + 'T00:00:00');
+    return t.type === 'expense' && t.cat === tx.cat && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).reduce((s, t) => s + t.amount, 0) : 0;
+
+  const [year, month, day] = tx.date.split('-');
+  const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  const fullDate = dateObj.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  return `
+  <div class="form-header">
+    <button class="back-btn" onclick="goTo('${state.prevScreen || 'bank'}')">${ICON.back} Back</button>
+  </div>
+
+  <!-- Hero -->
+  <div style="display:flex;flex-direction:column;align-items:center;padding:24px 0 28px;">
+    <div style="width:64px;height:64px;border-radius:20px;background:${color}22;border:1.5px solid ${color}44;display:flex;align-items:center;justify-content:center;color:${color};margin-bottom:14px;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[iconKey]?.match(/<svg[^>]*>(.*?)<\/svg>/s)?.[1] || ''}</svg>
+    </div>
+    <div style="font-size:14px;color:var(--cream-dim);margin-bottom:4px;">${escapeHtml(tx.desc || tx.cat)}</div>
+    <div style="font-size:36px;font-weight:700;color:${isExpense ? 'var(--cream)' : 'var(--income)'};">${isExpense ? '-' : '+'}${cur()}${fmt(tx.amount)}</div>
+    <div style="font-size:12px;color:var(--cream-dim);margin-top:6px;">${fullDate}</div>
+  </div>
+
+  <!-- Details card -->
+  <div class="card" style="margin-bottom:12px;">
+    <div style="display:flex;flex-direction:column;gap:0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);">
+        <span style="font-size:13px;color:var(--cream-dim);">Type</span>
+        <span style="font-size:13px;font-weight:600;color:${isExpense ? 'var(--expense)' : 'var(--income)'};">${isExpense ? 'Expense' : 'Income'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);">
+        <span style="font-size:13px;color:var(--cream-dim);">Category</span>
+        <span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
+          <span style="color:${color};">${ICON[iconKey]}</span>${tx.cat || 'Uncategorised'}
+        </span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);">
+        <span style="font-size:13px;color:var(--cream-dim);">Date</span>
+        <span style="font-size:13px;font-weight:600;">${dmy(tx.date)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;${goalSplitInfo.length > 0 || budget ? 'border-bottom:1px solid rgba(255,255,255,0.07);' : ''}">
+        <span style="font-size:13px;color:var(--cream-dim);">Total with this merchant</span>
+        <span style="font-size:13px;font-weight:600;">${cur()}${fmt(totalWithMerchant)}</span>
+      </div>
+      ${budget !== null ? `
+      <div style="padding:12px 0;${goalSplitInfo.length > 0 ? 'border-bottom:1px solid rgba(255,255,255,0.07);' : ''}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-size:13px;color:var(--cream-dim);">Budget this month</span>
+          <span style="font-size:13px;font-weight:600;">${cur()}${fmt(spentInCat)} / ${cur()}${fmt(budget)}</span>
+        </div>
+        <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${Math.min(100, (spentInCat/budget)*100).toFixed(1)}%;background:${spentInCat > budget ? 'var(--red-bar)' : color};border-radius:3px;"></div>
+        </div>
+      </div>` : ''}
+      ${goalSplitInfo.length > 0 ? `
+      <div style="padding:12px 0;">
+        <div style="font-size:13px;color:var(--cream-dim);margin-bottom:6px;">Allocated to goals</div>
+        ${goalSplitInfo.map(info => `<div style="font-size:13px;font-weight:600;color:var(--income);">→ ${info}</div>`).join('')}
+      </div>` : ''}
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div style="display:flex;justify-content:center;margin-bottom:24px;">
+    <button onclick="deleteTxnConfirm(${tx.id})" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);color:#ef4444;font-size:11px;font-family:'Poppins',sans-serif;padding:7px 16px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:500;">
+      ${ICON.trash} Delete
+    </button>
+  </div>`;
+}
+
 /* ---------- Toast Notifications ---------- */
 function showToast(message, type = 'info', duration = 3000) {
   // Create or get container
@@ -2451,4 +2899,6 @@ function showToast(message, type = 'info', duration = 3000) {
 
 // Load saved data on app start
 loadState();
+if (!state.unlockedBadges) state.unlockedBadges = [];
 render();
+setTimeout(() => checkAchievements(), 2000);
