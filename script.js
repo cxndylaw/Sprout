@@ -367,10 +367,10 @@ async function sendMagicLink() {
 
   showToast('Sending magic link...', 'info', 2000);
 
-  const { error } = await supabase.auth.signInWithOtp({
+  const { error } = await db.auth.signInWithOtp({
     email,
     options: {
-        emailRedirectTo: "https://sprout.cindy.dev/auth/callback.html"
+      emailRedirectTo: 'https://sprout.cindy.dev'
     }
   });
 
