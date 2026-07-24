@@ -23,7 +23,17 @@ const ICON = {
   trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>`,
   bell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>`,
   edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L21 6Z"/></svg>`,
-  subscription: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>`
+  subscription: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>`,
+  achievement: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>`,
+  mail: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="5" width="18" height="14" rx="2"/>
+  <path d="M3 7l9 6 9-6"/>
+  </svg>`,
+
+  lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="4" y="11" width="16" height="10" rx="2"/>
+  <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+  </svg>`,
 };
 
 const CAT_ICON = {
@@ -183,24 +193,199 @@ let displayedBalance = null; // for count-up animation
 let lastScreen = null; // track screen changes for page-enter animation
 
 /* ================= DATA PERSISTENCE ================= */
-function saveState() {
+/* ================= SUPABASE ================= */
+const SUPABASE_URL = 'https://ihukgfgqdkmjynmcfkak.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlodWtnZmdxZGttanlubWNma2FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTQ4OTksImV4cCI6MjEwMDQ3MDg5OX0.6As26zGUrpXGqZKXOJGPv4lK1tI4LCesM3V7wM8gRV8';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let saveTimeout = null;
+
+async function saveState() {
+  // Always save to localStorage as instant fallback
+  try { localStorage.setItem('sprout_data', JSON.stringify(state)); } catch(e) {}
+  // Debounce Supabase saves (don't hammer on every keystroke)
+  if (!currentUser) return;
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async () => {
+    try {
+      await db.from('user_data').upsert({
+        id: currentUser.id,
+        data: state,
+        updated_at: new Date().toISOString()
+      });
+    } catch(e) { console.error('Supabase save error:', e); }
+  }, 800);
+}
+
+async function loadState() {
+  if (!currentUser) {
+    // Fallback to localStorage if not logged in
+    try {
+      const saved = localStorage.getItem('sprout_data');
+      if (saved) Object.assign(state, JSON.parse(saved));
+    } catch(e) {}
+    return;
+  }
   try {
-    localStorage.setItem('sprout_data', JSON.stringify(state));
-  } catch (e) {
-    console.error('Failed to save state:', e);
+    const { data, error } = await db.from('user_data').select('data').eq('id', currentUser.id).single();
+    if (data?.data) {
+      Object.assign(state, data.data);
+    } else {
+      // New user — check if they have localStorage data to migrate
+      const local = localStorage.getItem('sprout_data');
+      if (local) {
+        Object.assign(state, JSON.parse(local));
+        // Save migrated data to Supabase
+        await db.from('user_data').upsert({ id: currentUser.id, data: state, updated_at: new Date().toISOString() });
+        localStorage.removeItem('sprout_data');
+        showToast('Your data has been synced to the cloud ☁️', 'success', 3000);
+      }
+    }
+  } catch(e) { console.error('Supabase load error:', e); }
+}
+
+/* ================= AUTH ================= */
+let authMode = 'login'; // 'login' | 'signup' | 'magic'
+
+function renderAuth() {
+  const isLogin = authMode === 'login';
+  const isMagic = authMode === 'magic';
+  return `
+  <div class="auth-screen">
+    <div class="auth-logo">
+      ${lotusSVG(80)}
+      <div class="brand" style="font-size:28px;">Sprout</div>
+      <div class="brand-cn" style="font-size:14px;margin-top:-4px;">发芽</div>
+    </div>
+
+    ${isMagic ? `
+    <div class="auth-card">
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Magic Link</div>
+      <div style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;">We'll email you a sign-in link — no password needed.</div>
+      <div class="auth-input">
+      <span class="auth-input-icon">
+          ${ICON.mail}
+      </span>
+
+      <input
+          type="email"
+          id="auth-email"
+          placeholder="Email address"
+          autocomplete="email"
+      >
+      </div>
+      <button class="auth-btn" onclick="sendMagicLink()">Send Magic Link</button>
+      <button class="auth-switch" onclick="authMode='login';render();">← Back to login</button>
+    </div>
+    ` : `
+    <div class="auth-card">
+      <div style="display:flex;gap:0;margin-bottom:20px;background:rgba(255,255,255,0.06);border-radius:10px;padding:3px;">
+        <button onclick="authMode='login';render();" style="flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-family:'Poppins',sans-serif;font-weight:600;background:${isLogin ? 'rgba(127,185,138,0.4)' : 'transparent'};color:var(--cream);">Log In</button>
+        <button onclick="authMode='signup';render();" style="flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-family:'Poppins',sans-serif;font-weight:600;background:${!isLogin ? 'rgba(127,185,138,0.4)' : 'transparent'};color:var(--cream);">Sign Up</button>
+      </div>
+      <div class="auth-input">
+    <span class="auth-input-icon">${ICON.lock}</span>
+    <input
+        type="email"
+        id="auth-email"
+        placeholder="Email address"
+        autocomplete="email"
+    >
+    </div>
+
+    <div class="auth-input">
+        <span class="auth-input-icon">🔒</span>
+        <input
+            type="password"
+            id="auth-password"
+            placeholder="Password"
+            autocomplete="current-password"
+        >
+        <button
+            class="password-toggle"
+            type="button"
+            onclick="togglePassword()"
+        >
+            ${ICON.eye}
+        </button>
+    </div>
+      ${!isLogin ? `<input type="text" id="auth-name" placeholder="Your name" style="margin-bottom:16px;">` : ''}
+      <button class="auth-btn" onclick="${isLogin ? 'signIn()' : 'signUp()'}">
+        ${isLogin ? 'Log In' : 'Create Account'}
+      </button>
+      <button class="auth-switch" onclick="authMode='magic';render();">✨ Sign in with magic link instead</button>
+      ${isLogin ? `<div style="font-size:11px;color:var(--cream-dim);text-align:center;margin-top:8px;">Forgot password? Use magic link above</div>` : ''}
+    </div>
+    `}
+    <div style="font-size:10px;color:var(--cream-dim);text-align:center;margin-top:16px;padding:0 20px;">Your data is securely stored and synced across all your devices.</div>
+  </div>`;
+}
+
+function togglePassword() {
+    const input = document.getElementById("auth-password");
+    const button = document.querySelector(".password-toggle");
+
+    if (input.type === "password") {
+        input.type = "text";
+        button.innerHTML = ICON.eyeOff;
+    } else {
+        input.type = "password";
+        button.innerHTML = ICON.eye;
+    }
+}
+
+async function signIn() {
+  const email = document.getElementById('auth-email')?.value?.trim();
+  const password = document.getElementById('auth-password')?.value;
+  if (!email || !password) { showToast('Please enter email and password', 'error', 3000); return; }
+  showToast('Signing in...', 'info', 2000);
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  if (error) showToast(error.message, 'error', 4000);
+}
+
+async function signUp() {
+  const email = document.getElementById('auth-email')?.value?.trim();
+  const password = document.getElementById('auth-password')?.value;
+  const name = document.getElementById('auth-name')?.value?.trim();
+  if (!email || !password) { showToast('Please enter email and password', 'error', 3000); return; }
+  if (password.length < 6) { showToast('Password must be at least 6 characters', 'error', 3000); return; }
+  showToast('Creating account...', 'info', 2000);
+  const { error } = await db.auth.signUp({ email, password });
+  if (error) { showToast(error.message, 'error', 4000); return; }
+  if (name) state.userName = name;
+  showToast('Account created! Check your email to confirm.', 'success', 5000);
+}
+
+async function sendMagicLink() {
+  const email = document.getElementById('auth-email')?.value?.trim();
+
+  if (!email) {
+    showToast('Please enter your email', 'error', 3000);
+    return;
+  }
+
+  showToast('Sending magic link...', 'info', 2000);
+
+  const { error } = await db.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: 'https://sprout.cindy.dev'
+    }
+  });
+
+  if (error) {
+    showToast(error.message, 'error', 4000);
+  } else {
+    showToast('Magic link sent! Check your inbox 📬', 'success', 5000);
   }
 }
 
-function loadState() {
-  try {
-    const saved = localStorage.getItem('sprout_data');
-    if (saved) {
-      const loadedState = JSON.parse(saved);
-      Object.assign(state, loadedState);
-    }
-  } catch (e) {
-    console.error('Failed to load state:', e);
-  }
+async function signOut() {
+  await db.auth.signOut();
+  currentUser = null;
+  state.screen = 'auth';
+  render();
 }
 
 function dmy(iso) { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; }
@@ -278,6 +463,11 @@ function render() {
 
   if (state.screen === 'splash') {
     c.innerHTML = renderSplash();
+    navWrap.innerHTML = '';
+    return;
+  }
+  if (state.screen === 'auth') {
+    c.innerHTML = renderAuth();
     navWrap.innerHTML = '';
     return;
   }
@@ -1163,6 +1353,10 @@ function deleteTxnConfirm(id) {
       if (g) g.saved = Math.max(0, g.saved - tx.amount);
     }
     state.txns = state.txns.filter(t => t.id !== id);
+    state.selectedTxnId = null;
+    // Return to bank page if we were in txnDetail, otherwise stay
+    if (state.screen === 'txnDetail') state.screen = 'bank';
+    showToast('Transaction deleted', 'success', 2000);
     render();
   }
 }
@@ -1424,7 +1618,9 @@ function saveEditBudget() {
   
   state.showEditBudget = false;
   state.editBudgetData = null;
+  state._budgetEdited = true;
   render();
+  setTimeout(() => checkAchievements(), 400);
 }
 
 function renderEditBudgetModal() {
@@ -1495,6 +1691,7 @@ function saveEditGoal() {
   state.editGoalData = null;
   showToast(`Goal updated!`, 'success', 2500);
   render();
+  setTimeout(() => checkAchievements(), 400);
 }
 
 function renderEditGoalModal() {
@@ -1654,6 +1851,7 @@ function submitNewGoal() {
   state.showAddGoal = false;
   showToast(`Goal "${name}" created!`, 'success', 2500);
   render();
+  setTimeout(() => checkAchievements(), 400);
 }
 
 /* ---------- Edit Budgets modal ---------- */
@@ -1717,7 +1915,7 @@ function renderAccount() {
   </div>
   <div class="card settings-list">
     <div class="s-row clickable" onclick="goTo('subscriptions')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.subscription}</span> Subscriptions</span>${ICON.chevron}</div>
-    <div class="s-row clickable" onclick="goTo('achievements')"><span>🏅 Achievements</span>${ICON.chevron}</div>
+    <div class="s-row clickable" onclick="goTo('achievements')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.achievement}</span> Achievements</span>${ICON.chevron}</div>
     <div class="s-row clickable" onclick="openStartingBalanceEditor()"><span>Starting balance: <strong>${cur()}${fmt(state.startingBalance)}</strong></span>${ICON.chevron}</div>
     
     <div class="s-row">
@@ -1744,6 +1942,7 @@ function renderAccount() {
     </div>
     
     <div class="s-row danger" onclick="resetData()"><span>Reset all data</span>${ICON.trash}</div>
+    <div class="s-row danger" onclick="signOut()" style="margin-top:4px;"><span>Sign out</span>${ICON.back}</div>
   </div>
   `;
 }
@@ -1788,6 +1987,7 @@ function saveStartingBalance() {
   const val = parseFloat(document.getElementById('balance-input').value);
   if (!isNaN(val)) {
     state.startingBalance = val;
+    state._balanceSet = true;
     showToast('Starting balance updated', 'success', 2500);
   } else {
     showToast('Invalid amount', 'error', 2500);
@@ -1866,11 +2066,12 @@ function handleAvatarUpload(input) {
 function saveProfileEditor() {
   const name = document.getElementById('profile-name').value.trim();
   const bio = document.getElementById('profile-bio').value.trim();
-  if (name) state.userName = name;
+  if (name) { state.userName = name; state._nameChanged = true; }
   if (bio) state.userBio = bio;
   showToast('Profile updated', 'success', 2500);
   state.showProfileEditor = false;
   render();
+  setTimeout(() => checkAchievements(), 400);
 }
 
 function resetData() {
@@ -2247,16 +2448,16 @@ function goalPlantSVG(pct) {
 
 const ALL_BADGES = [
   // 🌱 Getting Started
-  { id: 'first_login',       cat: 'Getting Started', icon: '🌱', name: 'First Sprout',         desc: 'Welcome to Sprout!',                          check: s => true },
+  { id: 'first_login',       cat: 'Getting Started', icon: '🌱', name: 'First Sprout',         desc: 'Open Sprout for the first time',              check: s => true },
   { id: 'first_txn',        cat: 'Getting Started', icon: '✍️', name: 'First Entry',           desc: 'Log your first transaction',                  check: s => s.txns.length >= 1 },
   { id: 'first_expense',    cat: 'Getting Started', icon: '💸', name: 'First Expense',         desc: 'Log your first expense',                      check: s => s.txns.some(t => t.type === 'expense') },
   { id: 'first_income',     cat: 'Getting Started', icon: '💰', name: 'First Income',          desc: 'Log your first income',                       check: s => s.txns.some(t => t.type === 'income') },
   { id: 'first_goal',       cat: 'Getting Started', icon: '🎯', name: 'Dream Big',             desc: 'Create your first goal',                      check: s => s.goals.length >= 1 },
-  { id: 'first_budget',     cat: 'Getting Started', icon: '📋', name: 'Budget Setter',         desc: 'Set your first budget',                       check: s => Object.keys(s.budgets).length >= 1 },
-  { id: 'named_yourself',   cat: 'Getting Started', icon: '👤', name: 'Identity',              desc: 'Add your name',                               check: s => s.userName && s.userName !== 'Alex' },
+  { id: 'first_budget',     cat: 'Getting Started', icon: '📋', name: 'Budget Setter',         desc: 'Edit or create a budget category',            check: s => s._budgetEdited === true },
+  { id: 'named_yourself',   cat: 'Getting Started', icon: '👤', name: 'Identity',              desc: 'Change your name in settings',                check: s => s._nameChanged === true },
   { id: 'added_avatar',     cat: 'Getting Started', icon: '🖼️', name: 'Face to a Name',        desc: 'Upload a profile picture',                    check: s => !!s.userAvatar },
-  { id: 'set_balance',      cat: 'Getting Started', icon: '🏦', name: 'Foundation',            desc: 'Set your starting balance',                   check: s => s.startingBalance > 0 },
-  { id: 'first_sub',        cat: 'Getting Started', icon: '📺', name: 'Subscription Aware',    desc: 'Add your first subscription',                 check: s => (s.subscriptions || []).length >= 1 },
+  { id: 'set_balance',      cat: 'Getting Started', icon: '🏦', name: 'Foundation',            desc: 'Update your starting balance',                check: s => s._balanceSet === true },
+  { id: 'first_sub',        cat: 'Getting Started', icon: '📺', name: 'Subscription Aware',    desc: 'Add your first subscription',                 check: s => s._subAdded === true },
 
   // 📊 Transactions
   { id: 'txn_5',            cat: 'Transactions', icon: '📝', name: 'Getting Tracked',       desc: 'Log 5 transactions',                          check: s => s.txns.length >= 5 },
@@ -2266,97 +2467,95 @@ const ALL_BADGES = [
   { id: 'txn_100',          cat: 'Transactions', icon: '📘', name: 'Century Logger',        desc: 'Log 100 transactions',                        check: s => s.txns.length >= 100 },
   { id: 'txn_250',          cat: 'Transactions', icon: '📙', name: 'Finance Historian',     desc: 'Log 250 transactions',                        check: s => s.txns.length >= 250 },
   { id: 'txn_500',          cat: 'Transactions', icon: '📚', name: 'Chronicle Master',      desc: 'Log 500 transactions',                        check: s => s.txns.length >= 500 },
-  { id: 'cat_all',          cat: 'Transactions', icon: '🌈', name: 'Category Explorer',     desc: 'Use all budget categories',                   check: s => Object.keys(s.budgets).every(c => s.txns.some(t => t.cat === c)) },
+  { id: 'cat_all',          cat: 'Transactions', icon: '🌈', name: 'Category Explorer',     desc: 'Use all budget categories at least once',     check: s => Object.keys(s.budgets).length >= 3 && Object.keys(s.budgets).every(c => s.txns.some(t => t.cat === c)) },
   { id: 'big_spend',        cat: 'Transactions', icon: '💳', name: 'Big Ticket',            desc: 'Log a single expense over $500',              check: s => s.txns.some(t => t.type === 'expense' && t.amount >= 500) },
   { id: 'big_income',       cat: 'Transactions', icon: '🤑', name: 'Payday',                desc: 'Log a single income over $5,000',             check: s => s.txns.some(t => t.type === 'income' && t.amount >= 5000) },
   { id: 'big_income2',      cat: 'Transactions', icon: '💎', name: 'Windfall',              desc: 'Log a single income over $20,000',            check: s => s.txns.some(t => t.type === 'income' && t.amount >= 20000) },
   { id: 'sub_expense',      cat: 'Transactions', icon: '🔁', name: 'Subscription Tracked',  desc: 'Log a subscription expense',                  check: s => s.txns.some(t => t.cat === 'Subscription') },
-  { id: 'income_split',     cat: 'Transactions', icon: '🍕', name: 'Smart Splitter',        desc: 'Split income across multiple goals',          check: s => s.txns.some(t => t.splitGoals && t.splitGoals.length > 1) },
+  { id: 'income_split',     cat: 'Transactions', icon: '🍕', name: 'Smart Splitter',        desc: 'Split income across multiple goals',          check: s => s.txns.some(t => t.splitGoals && t.splitGoals.filter(g=>g.goalId).length > 1) },
 
   // 🎯 Goals
-  { id: 'goal_1_done',      cat: 'Goals', icon: '⭐', name: 'Goal Getter',           desc: 'Complete your first goal',                    check: s => s.goals.some(g => g.saved >= g.goal) },
-  { id: 'goal_3_done',      cat: 'Goals', icon: '🌟', name: 'Triple Threat',         desc: 'Complete 3 goals',                            check: s => s.goals.filter(g => g.saved >= g.goal).length >= 3 },
-  { id: 'goal_5_done',      cat: 'Goals', icon: '💫', name: 'Goal Machine',          desc: 'Complete 5 goals',                            check: s => s.goals.filter(g => g.saved >= g.goal).length >= 5 },
-  { id: 'goal_10_done',     cat: 'Goals', icon: '🏆', name: 'Champion',              desc: 'Complete 10 goals',                           check: s => s.goals.filter(g => g.saved >= g.goal).length >= 10 },
-  { id: 'goal_20_done',     cat: 'Goals', icon: '👑', name: 'Goal Royalty',          desc: 'Complete 20 goals',                           check: s => s.goals.filter(g => g.saved >= g.goal).length >= 20 },
+  { id: 'goal_1_done',      cat: 'Goals', icon: '⭐', name: 'Goal Getter',           desc: 'Complete your first goal',                    check: s => s.goals.some(g => g.goal > 0 && g.saved >= g.goal) },
+  { id: 'goal_3_done',      cat: 'Goals', icon: '🌟', name: 'Triple Threat',         desc: 'Complete 3 goals',                            check: s => s.goals.filter(g => g.goal > 0 && g.saved >= g.goal).length >= 3 },
+  { id: 'goal_5_done',      cat: 'Goals', icon: '💫', name: 'Goal Machine',          desc: 'Complete 5 goals',                            check: s => s.goals.filter(g => g.goal > 0 && g.saved >= g.goal).length >= 5 },
+  { id: 'goal_10_done',     cat: 'Goals', icon: '🏆', name: 'Champion',              desc: 'Complete 10 goals',                           check: s => s.goals.filter(g => g.goal > 0 && g.saved >= g.goal).length >= 10 },
+  { id: 'goal_20_done',     cat: 'Goals', icon: '👑', name: 'Goal Royalty',          desc: 'Complete 20 goals',                           check: s => s.goals.filter(g => g.goal > 0 && g.saved >= g.goal).length >= 20 },
   { id: 'goal_3_active',    cat: 'Goals', icon: '🎪', name: 'Multitasker',           desc: 'Have 3 active goals at once',                 check: s => s.goals.length >= 3 },
   { id: 'goal_5_active',    cat: 'Goals', icon: '🎠', name: 'Ambitious',             desc: 'Have 5 active goals at once',                 check: s => s.goals.length >= 5 },
   { id: 'goal_big',         cat: 'Goals', icon: '🏔️', name: 'Dream Big',             desc: 'Set a goal over $10,000',                     check: s => s.goals.some(g => g.goal >= 10000) },
   { id: 'goal_bigger',      cat: 'Goals', icon: '🚀', name: 'Sky High',              desc: 'Set a goal over $50,000',                     check: s => s.goals.some(g => g.goal >= 50000) },
-  { id: 'goal_100pct',      cat: 'Goals', icon: '💯', name: 'Perfectionist',         desc: 'A goal reaches exactly 100%',                 check: s => s.goals.some(g => g.goal > 0 && g.saved === g.goal) },
-  { id: 'goal_over',        cat: 'Goals', icon: '📈', name: 'Overachiever',          desc: 'Save more than your goal target',             check: s => s.goals.some(g => g.saved > g.goal) },
+  { id: 'goal_100pct',      cat: 'Goals', icon: '💯', name: 'Perfectionist',         desc: 'Reach exactly 100% on any goal',              check: s => s.goals.some(g => g.goal > 0 && g.saved >= g.goal) },
+  { id: 'goal_over',        cat: 'Goals', icon: '📈', name: 'Overachiever',          desc: 'Save more than a goal\'s target amount',     check: s => s.goals.some(g => g.goal > 0 && g.saved > g.goal) },
   { id: 'goal_halfway',     cat: 'Goals', icon: '🌓', name: 'Halfway There',         desc: 'Reach 50% on any goal',                      check: s => s.goals.some(g => g.goal > 0 && g.saved / g.goal >= 0.5) },
-  { id: 'goal_travel',      cat: 'Goals', icon: '✈️', name: 'Wanderlust',            desc: 'Create a travel goal',                        check: s => s.goals.some(g => /trip|travel|holiday|vacation|flight/i.test(g.name)) },
-  { id: 'goal_house',       cat: 'Goals', icon: '🏠', name: 'Home Owner',            desc: 'Create a house/property goal',               check: s => s.goals.some(g => /house|home|property|deposit|mortgage/i.test(g.name)) },
+  { id: 'goal_travel',      cat: 'Goals', icon: '✈️', name: 'Wanderlust',            desc: 'Create a travel goal (trip/travel/holiday)',  check: s => s.goals.some(g => /trip|travel|holiday|vacation|flight/i.test(g.name)) },
+  { id: 'goal_house',       cat: 'Goals', icon: '🏠', name: 'Home Owner',            desc: 'Create a house or deposit goal',              check: s => s.goals.some(g => /house|home|property|deposit|mortgage/i.test(g.name)) },
   { id: 'goal_emergency',   cat: 'Goals', icon: '🛡️', name: 'Safety Net',            desc: 'Create an emergency fund goal',               check: s => s.goals.some(g => /emergency|safety|rainy/i.test(g.name)) },
 
   // 💰 Savings & Balance
-  { id: 'save_1k',          cat: 'Savings', icon: '💵', name: 'First Thousand',       desc: 'Save $1,000 across goals',                    check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 1000 },
-  { id: 'save_5k',          cat: 'Savings', icon: '💴', name: 'Five Large',           desc: 'Save $5,000 across goals',                    check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 5000 },
-  { id: 'save_10k',         cat: 'Savings', icon: '💶', name: 'Five Figures',         desc: 'Save $10,000 across goals',                   check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 10000 },
-  { id: 'save_50k',         cat: 'Savings', icon: '💷', name: 'Fifty K Club',         desc: 'Save $50,000 across goals',                   check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 50000 },
-  { id: 'save_100k',        cat: 'Savings', icon: '🏅', name: 'Six Figures',          desc: 'Save $100,000 across goals',                  check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 100000 },
-  { id: 'bal_100k',         cat: 'Savings', icon: '🎰', name: 'Centurion',            desc: 'Reach a balance of $100,000',                 check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 100000; } },
-  { id: 'bal_500k',         cat: 'Savings', icon: '🦁', name: 'Half Millionaire',     desc: 'Reach a balance of $500,000',                 check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 500000; } },
-  { id: 'bal_1m',           cat: 'Savings', icon: '🦄', name: 'Millionaire',          desc: 'Reach a balance of $1,000,000',               check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 1000000; } },
-  { id: 'positive_month',   cat: 'Savings', icon: '📗', name: 'In the Green',         desc: 'End a month with more income than expenses',  check: s => { const m={}; s.txns.forEach(t=>{const k=t.date.slice(0,7);if(!m[k])m[k]={i:0,e:0};t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i>v.e); } },
-  { id: 'surplus_1k',       cat: 'Savings', icon: '🌊', name: 'Surplus Hero',         desc: 'Have a monthly surplus over $1,000',          check: s => { const m={}; s.txns.forEach(t=>{const k=t.date.slice(0,7);if(!m[k])m[k]={i:0,e:0};t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i-v.e>=1000); } },
+  { id: 'save_1k',          cat: 'Savings', icon: '💵', name: 'First Thousand',       desc: 'Save $1,000 across all goals',                check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 1000 },
+  { id: 'save_5k',          cat: 'Savings', icon: '💴', name: 'Five Large',           desc: 'Save $5,000 across all goals',                check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 5000 },
+  { id: 'save_10k',         cat: 'Savings', icon: '💶', name: 'Five Figures',         desc: 'Save $10,000 across all goals',               check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 10000 },
+  { id: 'save_50k',         cat: 'Savings', icon: '💷', name: 'Fifty K Club',         desc: 'Save $50,000 across all goals',               check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 50000 },
+  { id: 'save_100k',        cat: 'Savings', icon: '🏅', name: 'Six Figures Saved',    desc: 'Save $100,000 across all goals',              check: s => s.goals.reduce((a,g)=>a+g.saved,0) >= 100000 },
+  { id: 'bal_100k',         cat: 'Savings', icon: '🎰', name: 'Centurion',            desc: 'Reach a total balance of $100,000',           check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 100000; } },
+  { id: 'bal_500k',         cat: 'Savings', icon: '🦁', name: 'Half Millionaire',     desc: 'Reach a total balance of $500,000',           check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 500000; } },
+  { id: 'bal_1m',           cat: 'Savings', icon: '🦄', name: 'Millionaire',          desc: 'Reach a total balance of $1,000,000',         check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e >= 1000000; } },
+  // Month-end only: checked on first transaction of a new month vs previous months
+  { id: 'positive_month',   cat: 'Savings', icon: '📗', name: 'In the Green',         desc: 'End a full month with more income than expenses', check: s => { const now=new Date(); const m={}; s.txns.forEach(t=>{const d=new Date(t.date+'T00:00:00'); const k=t.date.slice(0,7); if(d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()) return; // skip current month
+    if(!m[k])m[k]={i:0,e:0}; t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i>v.e); } },
+  { id: 'surplus_1k',       cat: 'Savings', icon: '🌊', name: 'Surplus Hero',         desc: 'Have a completed month with $1,000+ surplus', check: s => { const now=new Date(); const m={}; s.txns.forEach(t=>{const d=new Date(t.date+'T00:00:00'); const k=t.date.slice(0,7); if(d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()) return; if(!m[k])m[k]={i:0,e:0}; t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i-v.e>=1000); } },
 
   // 📊 Budgeting
-  { id: 'budget_3',         cat: 'Budgeting', icon: '📂', name: 'Multi-Budget',        desc: 'Set up 3 budgets',                            check: s => Object.keys(s.budgets).length >= 3 },
-  { id: 'budget_5',         cat: 'Budgeting', icon: '📁', name: 'Budget Pro',           desc: 'Set up 5 budgets',                            check: s => Object.keys(s.budgets).length >= 5 },
-  { id: 'budget_7',         cat: 'Budgeting', icon: '🗂️', name: 'Budget Master',        desc: 'Set up 7 budgets',                            check: s => Object.keys(s.budgets).length >= 7 },
+  { id: 'budget_3',         cat: 'Budgeting', icon: '📂', name: 'Multi-Budget',        desc: 'Set up 3 budget categories',                  check: s => Object.keys(s.budgets).length >= 3 },
+  { id: 'budget_5',         cat: 'Budgeting', icon: '📁', name: 'Budget Pro',           desc: 'Set up 5 budget categories',                  check: s => Object.keys(s.budgets).length >= 5 },
+  { id: 'budget_7',         cat: 'Budgeting', icon: '🗂️', name: 'Budget Master',        desc: 'Set up 7 budget categories',                  check: s => Object.keys(s.budgets).length >= 7 },
   { id: 'pct_mode',         cat: 'Budgeting', icon: '🔢', name: 'Percentage Thinker',   desc: 'Switch to income-based % budgeting',          check: s => s.budgetMode === 'percentage' },
-  { id: 'under_budget',     cat: 'Budgeting', icon: '✅', name: 'Under Control',        desc: 'Stay under budget in all categories this month', check: s => { const now=new Date(); return Object.keys(s.budgets).length>0 && Object.keys(s.budgets).every(cat=>{ const spent=s.txns.filter(t=>{const d=new Date(t.date+'T00:00:00');return t.type==='expense'&&t.cat===cat&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).reduce((a,t)=>a+t.amount,0); return spent<=s.budgets[cat]; }); } },
+  { id: 'under_budget',     cat: 'Budgeting', icon: '✅', name: 'Under Control',        desc: 'Complete a full month under budget in all categories', check: s => { const now=new Date(); const prevMonth=new Date(now.getFullYear(), now.getMonth()-1, 1); const pm=`${prevMonth.getFullYear()}-${String(prevMonth.getMonth()+1).padStart(2,'0')}`; const cats=Object.keys(s.budgets); if(cats.length===0) return false; return cats.every(cat=>{ const spent=s.txns.filter(t=>{return t.type==='expense'&&t.cat===cat&&t.date.slice(0,7)===pm;}).reduce((a,t)=>a+t.amount,0); return spent<=s.budgets[cat]; }); } },
 
   // 🔄 Subscriptions
   { id: 'sub_3',            cat: 'Subscriptions', icon: '📡', name: 'Subscriber',           desc: 'Track 3 subscriptions',                       check: s => (s.subscriptions||[]).length >= 3 },
   { id: 'sub_5',            cat: 'Subscriptions', icon: '📻', name: 'Service Collector',    desc: 'Track 5 subscriptions',                       check: s => (s.subscriptions||[]).length >= 5 },
   { id: 'sub_10',           cat: 'Subscriptions', icon: '📟', name: 'Sub Hoarder',          desc: 'Track 10 subscriptions',                      check: s => (s.subscriptions||[]).length >= 10 },
-  { id: 'sub_100',          cat: 'Subscriptions', icon: '💸', name: 'Sub Spender',          desc: 'Subscription total over $100/month',          check: s => (s.subscriptions||[]).reduce((a,sub)=>{if(sub.cycle==='monthly')return a+sub.amount;if(sub.cycle==='yearly')return a+sub.amount/12;if(sub.cycle==='weekly')return a+sub.amount*4.33;if(sub.cycle==='quarterly')return a+sub.amount/3;return a;},0)>=100 },
+  { id: 'sub_100',          cat: 'Subscriptions', icon: '💸', name: 'Sub Spender',          desc: 'Monthly subscription total over $100',        check: s => (s.subscriptions||[]).reduce((a,sub)=>{if(sub.cycle==='monthly')return a+sub.amount;if(sub.cycle==='yearly')return a+sub.amount/12;if(sub.cycle==='weekly')return a+sub.amount*4.33;if(sub.cycle==='quarterly')return a+sub.amount/3;return a;},0)>=100 },
 
-  // 🌿 Sprout Milestones
+  // 🌿 Sprout
   { id: 'plant_sprout',     cat: 'Sprout', icon: '🌱', name: 'Little Sprout',        desc: 'Any goal reaches 20%',                        check: s => s.goals.some(g=>g.goal>0&&g.saved/g.goal>=0.2) },
   { id: 'plant_seedling',   cat: 'Sprout', icon: '🪴', name: 'Growing Strong',       desc: 'Any goal reaches 40%',                        check: s => s.goals.some(g=>g.goal>0&&g.saved/g.goal>=0.4) },
   { id: 'plant_plant',      cat: 'Sprout', icon: '🌿', name: 'In Full Leaf',         desc: 'Any goal reaches 60%',                        check: s => s.goals.some(g=>g.goal>0&&g.saved/g.goal>=0.6) },
   { id: 'plant_flowering',  cat: 'Sprout', icon: '🌸', name: 'In Full Bloom',        desc: 'Any goal reaches 85%',                        check: s => s.goals.some(g=>g.goal>0&&g.saved/g.goal>=0.85) },
-  { id: 'plant_complete',   cat: 'Sprout', icon: '🌺', name: 'Full Harvest',         desc: 'Complete a goal',                             check: s => s.goals.some(g=>g.saved>=g.goal) },
+  { id: 'plant_complete',   cat: 'Sprout', icon: '🌺', name: 'Full Harvest',         desc: 'Complete any goal',                           check: s => s.goals.some(g=>g.goal>0&&g.saved>=g.goal) },
   { id: 'garden_3',         cat: 'Sprout', icon: '🌳', name: 'Small Garden',         desc: 'Have 3 goals at once',                        check: s => s.goals.length >= 3 },
   { id: 'garden_5',         cat: 'Sprout', icon: '🌲', name: 'Flourishing Garden',   desc: 'Have 5 goals at once',                        check: s => s.goals.length >= 5 },
   { id: 'garden_10',        cat: 'Sprout', icon: '🌴', name: 'Full Forest',          desc: 'Have 10 goals at once',                       check: s => s.goals.length >= 10 },
 
   // 🏅 Special
-  { id: 'no_expenses',      cat: 'Special', icon: '🧘', name: 'Spend Nothing Day',    desc: 'Go a day without expenses',                   check: s => { const days={}; s.txns.filter(t=>t.type==='expense').forEach(t=>days[t.date]=true); const all=s.txns.map(t=>t.date); return all.some(d=>!days[d]); } },
-  { id: 'income_3cats',     cat: 'Special', icon: '🎭', name: 'Income Diversified',   desc: 'Have 3 different income categories',          check: s => new Set(s.txns.filter(t=>t.type==='income').map(t=>t.cat)).size >= 3 },
-  { id: 'big_day',          cat: 'Special', icon: '🛍️', name: 'Retail Therapy',       desc: 'Spend over $300 in one day',                  check: s => { const d={}; s.txns.filter(t=>t.type==='expense').forEach(t=>d[t.date]=(d[t.date]||0)+t.amount); return Object.values(d).some(v=>v>=300); } },
-  { id: 'self_control',     cat: 'Special', icon: '🧊', name: 'Self Control',         desc: 'A month where expenses < 50% of income',     check: s => { const m={}; s.txns.forEach(t=>{const k=t.date.slice(0,7);if(!m[k])m[k]={i:0,e:0};t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i>0&&v.e/v.i<0.5); } },
-  { id: 'max_goals',        cat: 'Special', icon: '🌐', name: 'Goal Universe',        desc: 'Complete goals totalling over $100,000',      check: s => s.goals.filter(g=>g.saved>=g.goal).reduce((a,g)=>a+g.goal,0)>=100000 },
-  { id: 'early_bird',       cat: 'Special', icon: '🐦', name: 'Early Bird',           desc: 'Log a transaction before 7am',                check: s => false }, // time not stored
-  { id: 'description_rich', cat: 'Special', icon: '✏️', name: 'Detail Oriented',      desc: 'Add 10 transactions with descriptions',       check: s => s.txns.filter(t=>t.desc&&t.desc.length>3).length >= 10 },
-  { id: 'long_desc',        cat: 'Special', icon: '📝', name: 'Storyteller',          desc: 'Add a transaction with a 20+ char description', check: s => s.txns.some(t=>t.desc&&t.desc.length>=20) },
-  { id: 'split_3way',       cat: 'Special', icon: '🍰', name: 'Three-Way Split',      desc: 'Split income across 3 goals at once',         check: s => s.txns.some(t=>t.splitGoals&&t.splitGoals.length>=3) },
-  { id: 'goal_renamed',     cat: 'Special', icon: '✍️', name: 'Second Thoughts',      desc: 'Edit a goal\'s name',                         check: s => false }, // tracked manually
-  { id: 'full_profile',     cat: 'Special', icon: '💼', name: 'Complete Profile',     desc: 'Add name, bio, and photo',                    check: s => s.userName && s.userBio && s.userAvatar },
+  { id: 'no_expense_day',   cat: 'Special', icon: '🧘', name: 'Spend Nothing Day',   desc: 'Log income but no expenses on the same day',  check: s => { const expDays=new Set(s.txns.filter(t=>t.type==='expense').map(t=>t.date)); return s.txns.some(t=>t.type==='income'&&!expDays.has(t.date)); } },
+  { id: 'income_3cats',     cat: 'Special', icon: '🎭', name: 'Income Diversified',   desc: 'Have 3 different income categories',          check: s => new Set(s.txns.filter(t=>t.type==='income'&&t.cat).map(t=>t.cat)).size >= 3 },
+  { id: 'big_day',          cat: 'Special', icon: '🛍️', name: 'Retail Therapy',       desc: 'Spend over $300 in a single day',             check: s => { const d={}; s.txns.filter(t=>t.type==='expense').forEach(t=>d[t.date]=(d[t.date]||0)+t.amount); return Object.values(d).some(v=>v>=300); } },
+  { id: 'self_control',     cat: 'Special', icon: '🧊', name: 'Self Control',         desc: 'Complete a full month where expenses < 50% of income', check: s => { const now=new Date(); const m={}; s.txns.forEach(t=>{const d=new Date(t.date+'T00:00:00'); const k=t.date.slice(0,7); if(d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()) return; if(!m[k])m[k]={i:0,e:0}; t.type==='income'?m[k].i+=t.amount:m[k].e+=t.amount;}); return Object.values(m).some(v=>v.i>0&&v.e/v.i<0.5); } },
+  { id: 'max_goals',        cat: 'Special', icon: '🌐', name: 'Goal Universe',        desc: 'Complete goals totalling over $100,000',      check: s => s.goals.filter(g=>g.goal>0&&g.saved>=g.goal).reduce((a,g)=>a+g.goal,0)>=100000 },
+  { id: 'description_rich', cat: 'Special', icon: '✏️', name: 'Detail Oriented',      desc: 'Log 10 transactions with descriptions',       check: s => s.txns.filter(t=>t.desc&&t.desc.trim().length>2).length >= 10 },
+  { id: 'long_desc',        cat: 'Special', icon: '📝', name: 'Storyteller',          desc: 'Add a description longer than 20 characters', check: s => s.txns.some(t=>t.desc&&t.desc.length>=20) },
+  { id: 'split_3way',       cat: 'Special', icon: '🍰', name: 'Three-Way Split',      desc: 'Split income across 3 or more goals at once', check: s => s.txns.some(t=>t.splitGoals&&t.splitGoals.filter(g=>g.goalId).length>=3) },
+  { id: 'full_profile',     cat: 'Special', icon: '💼', name: 'Complete Profile',     desc: 'Set your name, bio, and profile picture',     check: s => !!(s.userName && s.userBio && s.userAvatar) },
 
   // 💹 Net Worth
-  { id: 'net_pos',          cat: 'Net Worth', icon: '📈', name: 'Positive Net Worth',   desc: 'Balance exceeds all expenses ever',           check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e>0; } },
-  { id: 'income_10k',       cat: 'Net Worth', icon: '💹', name: 'Five Figures Earned',  desc: 'Earn $10,000 total income',                   check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=10000 },
-  { id: 'income_50k',       cat: 'Net Worth', icon: '🏦', name: 'Fifty K Earner',       desc: 'Earn $50,000 total income',                   check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=50000 },
-  { id: 'income_100k',      cat: 'Net Worth', icon: '🌏', name: 'Six Figure Earner',    desc: 'Earn $100,000 total income',                  check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=100000 },
-  { id: 'income_1m',        cat: 'Net Worth', icon: '🚀', name: 'Million Dollar Earner',desc: 'Earn $1,000,000 total income',                check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=1000000 },
+  { id: 'net_pos',          cat: 'Net Worth', icon: '📈', name: 'Positive Net Worth',  desc: 'Your total balance is above zero',            check: s => { let i=0,e=0; s.txns.forEach(t=>t.type==='income'?i+=t.amount:e+=t.amount); return s.startingBalance+i-e>0; } },
+  { id: 'income_10k',       cat: 'Net Worth', icon: '💹', name: 'Five Figures Earned', desc: 'Log $10,000 in total income',                 check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=10000 },
+  { id: 'income_50k',       cat: 'Net Worth', icon: '🏦', name: 'Fifty K Earner',      desc: 'Log $50,000 in total income',                 check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=50000 },
+  { id: 'income_100k',      cat: 'Net Worth', icon: '🌏', name: 'Six Figure Earner',   desc: 'Log $100,000 in total income',                check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=100000 },
+  { id: 'income_1m',        cat: 'Net Worth', icon: '🚀', name: 'Million Dollar Earner', desc: 'Log $1,000,000 in total income',             check: s => s.txns.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)>=1000000 },
 
   // 🧠 Wisdom
-  { id: 'read_analysis',    cat: 'Wisdom', icon: '🔭', name: 'Data Driven',           desc: 'View all 3 analysis types',                   check: s => false }, // tracked manually
-  { id: 'used_pct_budget',  cat: 'Wisdom', icon: '🧮', name: 'Percentage Master',     desc: 'Set percentages for all budgets',             check: s => s.budgetMode==='percentage' && Object.keys(s.budgets).length>0 && Object.keys(s.budgets).every(c=>s.budgetsPercentage[c]>0) },
+  { id: 'used_pct_budget',  cat: 'Wisdom', icon: '🧮', name: 'Percentage Master',     desc: 'Set income % for all budget categories',      check: s => s.budgetMode==='percentage' && Object.keys(s.budgets).length>=3 && Object.keys(s.budgets).every(c=>s.budgetsPercentage[c]>0) },
   { id: 'txn_same_day',     cat: 'Wisdom', icon: '⚡', name: 'Productive Day',        desc: 'Log 5 transactions in one day',               check: s => { const d={}; s.txns.forEach(t=>d[t.date]=(d[t.date]||0)+1); return Object.values(d).some(v=>v>=5); } },
-  { id: 'all_cats_budgeted',cat: 'Wisdom', icon: '🎓', name: 'Fully Planned',         desc: 'Have a budget for every category you spend in', check: s => { const cats=new Set(s.txns.filter(t=>t.type==='expense'&&t.cat).map(t=>t.cat)); return [...cats].every(c=>c==='Subscription'||s.budgets[c]); } },
-  { id: 'zero_waste',       cat: 'Wisdom', icon: '♻️', name: 'Zero Waste',            desc: 'All income allocated (100% split to goals)',  check: s => s.txns.some(t=>t.type==='income'&&t.splitGoals&&t.splitGoals.reduce((a,g)=>a+(parseFloat(g.pct)||0),0)===100) },
+  { id: 'all_cats_budgeted',cat: 'Wisdom', icon: '🎓', name: 'Fully Planned',         desc: 'Have a budget for every category you spend in', check: s => { const cats=new Set(s.txns.filter(t=>t.type==='expense'&&t.cat&&t.cat!=='Subscription').map(t=>t.cat)); return cats.size>=3&&[...cats].every(c=>s.budgets[c]); } },
+  { id: 'zero_waste',       cat: 'Wisdom', icon: '♻️', name: 'Zero Waste',            desc: 'Allocate 100% of an income to goals',         check: s => s.txns.some(t=>t.type==='income'&&t.splitGoals&&t.splitGoals.filter(g=>g.goalId).reduce((a,g)=>a+(parseFloat(g.pct)||0),0)===100) },
 
   // 🎨 Collector
   { id: 'badge_10',         cat: 'Collector', icon: '🎖️', name: 'Badge Collector',    desc: 'Unlock 10 badges',                            check: s => (s.unlockedBadges||[]).length >= 10 },
   { id: 'badge_25',         cat: 'Collector', icon: '🏅', name: 'Badge Hunter',       desc: 'Unlock 25 badges',                            check: s => (s.unlockedBadges||[]).length >= 25 },
   { id: 'badge_50',         cat: 'Collector', icon: '🥇', name: 'Badge Master',       desc: 'Unlock 50 badges',                            check: s => (s.unlockedBadges||[]).length >= 50 },
-  { id: 'badge_all',        cat: 'Collector', icon: '👑', name: 'Hall of Fame',       desc: 'Unlock all achievable badges',                check: s => false },
 ];
 
 function checkAchievements() {
@@ -2384,12 +2583,27 @@ function checkAchievements() {
 }
 
 function showBadgeToast(badge) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.getElementById('phone').appendChild(container);
+  }
   const el = document.createElement('div');
   el.className = 'toast-badge';
-  el.innerHTML = `<span style="font-size:22px;">${badge.icon}</span><div><div style="font-size:11px;font-weight:700;color:var(--cream);">Badge Unlocked!</div><div style="font-size:12px;font-weight:600;color:var(--income);">${badge.name}</div><div style="font-size:10px;color:var(--cream-dim);">${badge.desc}</div></div>`;
-  document.getElementById('toast-container').appendChild(el);
+  el.style.cursor = 'pointer';
+  el.innerHTML = `<span style="font-size:24px;">${badge.icon}</span><div style="flex:1;"><div style="font-size:11px;font-weight:700;color:var(--cream);">Badge Unlocked! 🎉</div><div style="font-size:13px;font-weight:600;color:var(--income);">${badge.name}</div><div style="font-size:10px;color:var(--cream-dim);margin-top:2px;">${badge.desc}</div></div><div style="font-size:10px;color:var(--cream-dim);flex-shrink:0;align-self:center;">Tap →</div>`;
+  el.onclick = () => {
+    state.selectedBadgeId = badge.id;
+    if (state.screen !== 'achievements') state.prevScreen = state.screen;
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 400);
+    render();
+  };
+  container.appendChild(el);
   setTimeout(() => el.classList.add('show'), 50);
-  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 3500);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 4000);
 }
 
 function renderBadgeModal() {
@@ -2403,18 +2617,21 @@ function renderBadgeModal() {
   <div class="modal-overlay" onclick="state.selectedBadgeId=null;render();">
     <div class="plain-modal" onclick="event.stopPropagation();" style="text-align:center;">
       <div style="font-size:52px;margin-bottom:12px;${unlocked ? '' : 'filter:grayscale(1);opacity:0.4;'}">${badge.icon}</div>
-      <div style="font-size:17px;font-weight:700;margin-bottom:6px;">${badge.name}</div>
-      <div style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;">${badge.cat}</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:4px;">${badge.name}</div>
+      <div style="font-size:11px;color:var(--cream-dim);margin-bottom:14px;text-transform:uppercase;letter-spacing:0.5px;">${badge.cat}</div>
       <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:12px;margin-bottom:14px;">
         <div style="font-size:13px;color:var(--cream);line-height:1.5;">${badge.desc}</div>
       </div>
       ${unlocked
-        ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--income);font-weight:600;">
-             ✅ Unlocked ${dateFormatted ? `on ${dateFormatted}` : ''}
+        ? `<div style="background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);border-radius:10px;padding:10px;margin-bottom:14px;">
+             <div style="font-size:11px;color:var(--cream-dim);margin-bottom:2px;">Unlocked on</div>
+             <div style="font-size:14px;font-weight:700;color:var(--income);">${dateFormatted || 'Unknown date'}</div>
            </div>`
-        : `<div style="font-size:12px;color:var(--cream-dim);">🔒 Not yet unlocked</div>`
+        : `<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px;margin-bottom:14px;">
+             <div style="font-size:12px;color:var(--cream-dim);">🔒 Not yet unlocked</div>
+           </div>`
       }
-      <button class="cancel" style="margin-top:16px;width:100%;" onclick="state.selectedBadgeId=null;render();">Close</button>
+      <button onclick="state.selectedBadgeId=null;render();" style="width:100%;background:rgba(74,107,88,0.5);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:12px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;font-weight:600;cursor:pointer;">Done</button>
     </div>
   </div>`;
 }
@@ -2636,6 +2853,7 @@ function saveAddSub() {
   
   if (!state.subscriptions) state.subscriptions = [];
   state.subscriptions.push({ id: state.nextSubId++, name, amount, cycle, cat, color, emoji });
+  state._subAdded = true;
   showToast(`${name} added!`, 'success', 2500);
   state.showAddSub = false;
   render();
@@ -2897,8 +3115,48 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
-// Load saved data on app start
-loadState();
-if (!state.unlockedBadges) state.unlockedBadges = [];
-render();
-setTimeout(() => checkAchievements(), 2000);
+// ================= APP INIT =================
+async function initApp() {
+  // Check if user is already logged in
+  const { data: { session } } = await db.auth.getSession();
+  
+  if (session?.user) {
+    currentUser = session.user;
+    await loadState();
+    if (!state.unlockedBadges) state.unlockedBadges = [];
+    render();
+    setTimeout(() => checkAchievements(), 2000);
+  } else {
+    // Check localStorage for existing data (returning user not yet migrated)
+    const local = localStorage.getItem('sprout_data');
+    if (local) {
+      try { Object.assign(state, JSON.parse(local)); } catch(e) {}
+    }
+    state.screen = 'auth';
+    render();
+  }
+
+  // Listen for auth state changes (login, logout, magic link callback)
+  db.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session?.user) {
+      currentUser = session.user;
+      await loadState();
+      if (!state.unlockedBadges) state.unlockedBadges = [];
+      if (state.screen === 'auth') state.screen = 'splash';
+      render();
+      setTimeout(() => checkAchievements(), 2000);
+      showToast(`Welcome back! ☁️`, 'success', 2500);
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      state.screen = 'auth';
+      render();
+    }
+  });
+}
+
+// Lock to portrait on supported browsers
+if (screen.orientation && screen.orientation.lock) {
+  screen.orientation.lock('portrait').catch(() => {});
+}
+
+initApp();
