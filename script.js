@@ -558,17 +558,30 @@ function animateNumberEl(el, target) {
 }
 
 /* ---------- Splash ---------- */
-// Detect if running as installed PWA or in a browser
 const isPWA = window.matchMedia('(display-mode: standalone)').matches 
   || window.navigator.standalone === true;
 
+function shouldShowInstallBanner() {
+  if (isPWA) return false;
+  if (window.innerWidth > 500) return false;
+  // Only show once per week
+  const last = localStorage.getItem('sprout_install_prompt');
+  if (!last) return true;
+  const daysSince = (Date.now() - parseInt(last)) / (1000 * 60 * 60 * 24);
+  return daysSince >= 7;
+}
+
+function dismissInstallBanner() {
+  localStorage.setItem('sprout_install_prompt', Date.now().toString());
+  goTo('home');
+}
+
 function renderSplash() {
   const lotusSize = Math.min(140, window.innerHeight * 0.2);
-  const isMobile = window.innerWidth <= 500;
-  const showInstallBanner = isMobile && !isPWA;
+  const showInstallBanner = shouldShowInstallBanner();
 
   return `
-  <div class="splash" onclick="${showInstallBanner ? '' : "goTo('home')"}" style="${showInstallBanner ? 'cursor:default;justify-content:space-between;padding-bottom:20px;' : ''}">
+  <div class="splash" onclick="${showInstallBanner ? '' : "goTo('home')"}" style="${showInstallBanner ? 'cursor:default;justify-content:space-between;padding-bottom:28px;' : ''}">
     <div>
       <div class="brand">Sprout</div>
       <div class="brand-cn">发芽</div>
@@ -578,10 +591,10 @@ function renderSplash() {
     <div style="width:100%;display:flex;flex-direction:column;gap:10px;padding:0 8px;">
       <div style="background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);border-radius:14px;padding:14px 16px;text-align:center;">
         <div style="font-size:13px;font-weight:600;margin-bottom:4px;">📲 Install Sprout as an App</div>
-        <div style="font-size:11px;color:var(--cream-dim);line-height:1.6;">Get the full experience — no browser bars, works offline, feels native.</div>
+        <div style="font-size:11px;color:var(--cream-dim);line-height:1.6;">Get the full experience — no browser bars, feels native.</div>
       </div>
       <button onclick="event.stopPropagation();state.showInstallGuide=true;render();" class="auth-btn" style="margin:0;">How to install →</button>
-      <button onclick="event.stopPropagation();goTo('home');" style="background:none;border:none;color:var(--cream-dim);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;padding:4px;">Continue in browser</button>
+      <button onclick="event.stopPropagation();dismissInstallBanner();" style="background:none;border:none;color:var(--cream-dim);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;padding:4px;">Continue in browser</button>
     </div>
     ` : `<div class="hint">Tap to begin</div>`}
   </div>
@@ -594,33 +607,28 @@ function renderInstallGuideModal() {
   <div class="modal-overlay" onclick="state.showInstallGuide=false;render();" style="position:fixed;inset:0;z-index:100;">
     <div class="plain-modal" onclick="event.stopPropagation();" style="max-height:80vh;overflow-y:auto;">
       <h3 style="text-align:center;margin-bottom:16px;">📲 Install Sprout</h3>
-      
-      ${isIOS ? `
       <div style="margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🍎</span>iPhone / iPad — Safari</div>
-        ${[
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:18px;">${isIOS ? '🍎' : '🤖'}</span>${isIOS ? 'iPhone / iPad — Safari' : 'Android — Chrome'}
+        </div>
+        ${(isIOS ? [
           ['1','Open Sprout in <strong>Safari</strong>'],
-          ['2','Tap the <strong>Share button ↑</strong> at the bottom of the screen'],
-          ['3','Scroll down and tap <strong>"Add to Home Screen"</strong>'],
-          ['4','Tap <strong>"Add"</strong> in the top right corner'],
-        ].map(([n,t]) => `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;"><div style="min-width:24px;height:24px;border-radius:50%;background:rgba(127,185,138,0.3);border:1px solid rgba(127,185,138,0.5);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">${n}</div><div style="font-size:12px;color:var(--cream-dim);line-height:1.6;padding-top:3px;">${t}</div></div>`).join('')}
-      </div>` : `
-      <div style="margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🤖</span>Android — Chrome</div>
-        ${[
+          ['2','Tap the <strong>Share icon ↑</strong> at the bottom'],
+          ['3','Scroll and tap <strong>"Add to Home Screen"</strong>'],
+          ['4','Tap <strong>"Add"</strong> in the top right'],
+        ] : [
           ['1','Open Sprout in <strong>Chrome</strong>'],
           ['2','Tap the <strong>⋮ menu</strong> (top right)'],
           ['3','Tap <strong>"Add to Home screen"</strong>'],
           ['4','Tap <strong>"Add"</strong> to confirm'],
-        ].map(([n,t]) => `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;"><div style="min-width:24px;height:24px;border-radius:50%;background:rgba(127,185,138,0.3);border:1px solid rgba(127,185,138,0.5);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">${n}</div><div style="font-size:12px;color:var(--cream-dim);line-height:1.6;padding-top:3px;">${t}</div></div>`).join('')}
-      </div>`}
-
+        ]).map(([n,t]) => `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;"><div style="min-width:24px;height:24px;border-radius:50%;background:rgba(127,185,138,0.3);border:1px solid rgba(127,185,138,0.5);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">${n}</div><div style="font-size:12px;color:var(--cream-dim);line-height:1.6;padding-top:3px;">${t}</div></div>`).join('')}
+      </div>
       <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px 12px;font-size:11px;color:var(--cream-dim);line-height:1.6;margin-bottom:16px;">
-        ✨ Once installed, Sprout runs fullscreen with no browser bars — just like a native app.
+        ✨ Once installed, Sprout runs fullscreen like a native app — no browser bars.
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <button class="auth-btn" style="margin:0;" onclick="state.showInstallGuide=false;render();">Got it!</button>
-        <button onclick="state.showInstallGuide=false;goTo('home');" style="background:none;border:none;color:var(--cream-dim);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;padding:4px;">Continue in browser</button>
+        <button class="auth-btn" style="margin:0;" onclick="state.showInstallGuide=false;localStorage.setItem('sprout_install_prompt',Date.now());render();">Got it!</button>
+        <button onclick="state.showInstallGuide=false;dismissInstallBanner();" style="background:none;border:none;color:var(--cream-dim);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;padding:4px;">Continue in browser</button>
       </div>
     </div>
   </div>`;
@@ -1966,6 +1974,7 @@ function renderAccount() {
   <div class="card settings-list" style="margin-bottom:14px;">
     <div class="s-row clickable" onclick="goTo('subscriptions')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.subscription}</span> Subscriptions</span>${ICON.chevron}</div>
     <div class="s-row clickable" onclick="goTo('achievements')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.achievement}</span> Achievements</span>${ICON.chevron}</div>
+    ${!isPWA ? `<div class="s-row clickable" onclick="state.showInstallGuide=true;render()"><span>📲 Install as App</span>${ICON.chevron}</div>` : ''}
   </div>
 
   <!-- Settings -->
@@ -3747,24 +3756,23 @@ if (screen.orientation && screen.orientation.lock) {
 let resumeLoaderShown = false;
 
 function showResumeLoader() {
-  const phone = document.getElementById('phone');
-  if (!phone || document.getElementById('resume-loader')) return;
+  if (document.getElementById('resume-loader')) return;
 
   const loader = document.createElement('div');
   loader.id = 'resume-loader';
   loader.style.cssText = `
-    position: absolute; inset: 0;
+    position: fixed; inset: 0;
     background: var(--bg);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    z-index: 999;
+    z-index: 9999;
     opacity: 1;
   `;
   loader.innerHTML = `
-    <div style="opacity:0.85;">${lotusSVG(60)}</div>
-    <div style="font-family:'Fraunces',serif;font-size:22px;font-style:italic;color:var(--cream);margin-top:12px;opacity:0.9;">Sprout</div>
+    <div style="opacity:0.85;">${lotusSVG(70)}</div>
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-style:italic;color:var(--cream);margin-top:14px;opacity:0.9;">Sprout</div>
   `;
-  phone.appendChild(loader);
+  document.body.appendChild(loader);
   resumeLoaderShown = true;
 }
 
