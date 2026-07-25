@@ -125,7 +125,8 @@ const DEFAULT_STATE = {
   showResetModal: false, resetStep: 0,
   setupComplete: false, setupStep: 0,
   subscriptions: [], nextSubId: 1,
-  showAddSub: false, showEditSub: false, editSubData: null
+  showAddSub: false, showEditSub: false, editSubData: null,
+  showEditAccount: false,
 };
 
 let state = { ...DEFAULT_STATE };
@@ -170,20 +171,23 @@ async function loadState() {
     const { data: { session } } = await db.auth.getSession();
     if (!session) return;
 
-    const { data, error } = await db.from('user_data').select('data').eq('id', currentUser.id).maybeSingle();
+    // Use limit(1) instead of maybeSingle() — avoids 406 when no row exists
+    const { data: rows, error } = await db.from('user_data')
+      .select('data')
+      .eq('id', currentUser.id)
+      .limit(1);
     
     if (error) {
       console.error('Supabase load error:', error.message);
       return;
     }
 
-    if (data?.data) {
-      // Existing user — reset to clean default then load their data
-      Object.assign(state, DEFAULT_STATE, data.data);
-      localStorage.removeItem('sprout_data');
+    const row = rows && rows.length > 0 ? rows[0] : null;
+    if (row?.data) {
+      // Existing user — load their saved data on top of clean defaults
+      Object.assign(state, DEFAULT_STATE, row.data);
     }
-    // New user (no Supabase data) — state stays as DEFAULT_STATE, setup flow handles the rest
-    // Never pull from localStorage when logged in (prevents account bleed)
+    // New user or existing — always clear localStorage, Supabase is source of truth
     localStorage.removeItem('sprout_data');
     
   } catch(e) { console.error('Supabase load error:', e); }
@@ -479,6 +483,7 @@ function render() {
   if (state.showEditSub) modalHtml += renderEditSubModal();
   if (state.selectedBadgeId) modalHtml += renderBadgeModal();
   if (state.showResetModal) modalHtml += renderResetModal();
+  if (state.showEditAccount) modalHtml += renderEditAccountModal();
 
   // Get or create modal container
   let modalContainer = phone.querySelector('#modal-container');
@@ -493,7 +498,7 @@ function render() {
   const hasModal = state.showWarning || state.showEditBudget || state.showEditGoal || 
                    state.showAddGoal || state.showEditBudgets || state.showEditBalance || 
                    state.showProfileEditor || state.showAddSub || state.showEditSub || 
-                   !!state.selectedBadgeId || state.showResetModal;
+                   !!state.selectedBadgeId || state.showResetModal || state.showEditAccount;
   
   c.style.overflow = hasModal ? 'hidden' : 'scroll';
 
@@ -1875,36 +1880,46 @@ function saveEditBudgets() {
 /* ---------- Account ---------- */
 function renderAccount() {
   const t = totals();
+  const email = currentUser?.email || '';
   return `
   <div class="header-plain">Account</div>
-  <div class="card" style="text-align:center;position:relative;">
+
+  <!-- Profile card -->
+  <div class="card" style="text-align:center;position:relative;margin-bottom:14px;">
     <button class="profile-edit-btn" onclick="openProfileEditor()" title="Edit profile">${ICON.edit}</button>
     <div class="avatar" style="${state.userAvatar ? `background-image:url(${state.userAvatar});background-size:cover;background-position:center;` : ''}">${!state.userAvatar ? ICON.account : ''}</div>
-    <input class="acc-name-input" value="${escapeHtml(state.userName)}" onchange="updateName(this.value)">
-    <div class="acc-sub">${escapeHtml(state.userBio || 'Personal Finance Tracker')}</div>
+    <div style="font-size:16px;font-weight:700;margin-top:8px;">${escapeHtml(state.userName || 'Your Name')}</div>
+    <div style="font-size:12px;color:var(--cream-dim);margin-top:2px;">${escapeHtml(state.userBio || 'Personal Finance Tracker')}</div>
+    ${email ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:6px;">${email}</div>` : ''}
   </div>
-  <div class="card">
-    <div class="dim" style="margin-bottom:10px;">At a glance</div>
+
+  <!-- Stats -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="dim" style="margin-bottom:10px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">At a glance</div>
     <div class="row-between" style="margin-bottom:8px;"><span>Current balance</span><strong>${cur()}${fmt(t.balance)}</strong></div>
-    <div class="row-between" style="margin-bottom:8px;"><span>Total income</span><strong>${cur()}${fmt(t.income)}</strong></div>
-    <div class="row-between" style="margin-bottom:8px;"><span>Total expense</span><strong>${cur()}${fmt(t.expense)}</strong></div>
+    <div class="row-between" style="margin-bottom:8px;"><span>Total income</span><strong style="color:var(--income);">${cur()}${fmt(t.income)}</strong></div>
+    <div class="row-between" style="margin-bottom:8px;"><span>Total expense</span><strong style="color:var(--expense);">${cur()}${fmt(t.expense)}</strong></div>
     <div class="row-between"><span>Active goals</span><strong>${state.goals.length}</strong></div>
   </div>
-  <div class="card settings-list">
+
+  <!-- Quick links -->
+  <div class="card settings-list" style="margin-bottom:14px;">
     <div class="s-row clickable" onclick="goTo('subscriptions')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.subscription}</span> Subscriptions</span>${ICON.chevron}</div>
     <div class="s-row clickable" onclick="goTo('achievements')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.achievement}</span> Achievements</span>${ICON.chevron}</div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card settings-list" style="margin-bottom:14px;">
+    <div style="font-size:11px;color:var(--cream-dim);text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 4px;">App Settings</div>
     <div class="s-row clickable" onclick="openStartingBalanceEditor()"><span>Starting balance: <strong>${cur()}${fmt(state.startingBalance)}</strong></span>${ICON.chevron}</div>
-    
     <div class="s-row">
       <span style="display:flex;align-items:center;gap:8px;">${ICON.bell} Notifications</span>
       <button class="switch ${state.notificationsOn ? 'on' : ''}" onclick="toggleNotifications()"><span class="knob"></span></button>
     </div>
-    
     <div class="s-row">
-      <span>Balance visibility</span>
-      <button class="switch ${state.balanceHidden ? '' : 'on'}" onclick="toggleBalanceHidden()"><span class="knob"></span></button>
+      <span>Hide balance</span>
+      <button class="switch ${state.balanceHidden ? 'on' : ''}" onclick="toggleBalanceHidden()"><span class="knob"></span></button>
     </div>
-    
     <div class="s-row" onclick="openCurrencyDropdown()" style="position:relative;">
       <span>Currency: <strong>${state.currency}</strong></span>
       <div id="currency-dropdown" class="currency-dropdown" style="display:none;">
@@ -1912,13 +1927,18 @@ function renderAccount() {
       </div>
       ${ICON.chevron}
     </div>
-    
     <div class="s-row">
-      <span>Budget mode: <strong>${state.budgetMode === 'fixed' ? 'Fixed Monthly' : 'Income-Based %'}</strong></span>
+      <span>Budget mode: <strong>${state.budgetMode === 'fixed' ? 'Fixed' : 'Income %'}</strong></span>
       <button class="switch ${state.budgetMode === 'percentage' ? 'on' : ''}" onclick="toggleBudgetMode()"><span class="knob"></span></button>
     </div>
-    
+  </div>
+
+  <!-- Account actions -->
+  <div class="card settings-list" style="margin-bottom:14px;">
+    <div style="font-size:11px;color:var(--cream-dim);text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 4px;">Account</div>
+    <div class="s-row clickable" onclick="openEditAccountModal()"><span>Edit account details</span>${ICON.chevron}</div>
     <div class="s-row danger" onclick="resetData()"><span>Reset all data</span>${ICON.trash}</div>
+    <div class="s-row danger" onclick="confirmDeleteAccount()"><span>Delete account</span>${ICON.trash}</div>
     <div class="s-row danger" onclick="signOut()" style="margin-top:4px;"><span>Sign out</span>${ICON.back}</div>
   </div>
   `;
@@ -1930,6 +1950,88 @@ function toggleBalanceHidden() { state.balanceHidden = !state.balanceHidden; ren
 function toggleBudgetMode() { 
   state.budgetMode = state.budgetMode === 'fixed' ? 'percentage' : 'fixed';
   render();
+}
+
+function openEditAccountModal() {
+  state.showEditAccount = true;
+  render();
+}
+
+function closeEditAccount() {
+  state.showEditAccount = false;
+  render();
+}
+
+function saveEditAccount() {
+  const name = document.getElementById('edit-acc-name')?.value?.trim();
+  const bio = document.getElementById('edit-acc-bio')?.value?.trim();
+  if (!name) { showToast('Name cannot be empty', 'error', 2500); return; }
+  state.userName = name;
+  state.userBio = bio || '';
+  state._nameChanged = true;
+  showToast('Account details updated', 'success', 2500);
+  state.showEditAccount = false;
+  saveState();
+  render();
+}
+
+function renderEditAccountModal() {
+  if (!state.showEditAccount) return '';
+  const email = currentUser?.email || '';
+  return `
+  <div class="modal-overlay">
+    <div class="plain-modal">
+      <h3>Edit Account</h3>
+      <div class="field">
+        <div class="field-label">Name</div>
+        <input type="text" id="edit-acc-name" value="${escapeHtml(state.userName || '')}" placeholder="Your name">
+      </div>
+      <div class="field">
+        <div class="field-label">Bio / tagline</div>
+        <input type="text" id="edit-acc-bio" value="${escapeHtml(state.userBio || '')}" placeholder="e.g. Saving for my first home">
+      </div>
+      ${email ? `
+      <div class="field">
+        <div class="field-label">Email</div>
+        <div style="font-size:13px;color:var(--cream-dim);padding:10px 0;">${email}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.3);">Email is managed through your login. Use magic link to change.</div>
+      </div>` : ''}
+      <div class="field">
+        <div class="field-label">Profile Picture</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+          <div style="width:50px;height:50px;border-radius:50%;background:rgba(127,185,138,0.2);border:2px solid rgba(127,185,138,0.4);display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0;">
+            ${state.userAvatar ? `<img src="${state.userAvatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
+          </div>
+          <input type="file" id="avatar-input" accept="image/*" onchange="handleAvatarUpload(this)" style="display:none;">
+          <button onclick="document.getElementById('avatar-input').click();" style="background:rgba(127,185,138,0.2);border:1px solid rgba(127,185,138,0.3);color:var(--cream);padding:8px 14px;border-radius:8px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;">Change photo</button>
+          ${state.userAvatar ? `<button onclick="state.userAvatar=null;render();" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:8px 10px;border-radius:8px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;">Remove</button>` : ''}
+        </div>
+      </div>
+      <div class="modal-btn-row">
+        <button class="cancel" onclick="closeEditAccount()">Cancel</button>
+        <button class="confirm" onclick="saveEditAccount()">Save</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function confirmDeleteAccount() {
+  const input = prompt('Type DELETE to permanently delete your account and all data. This cannot be undone.');
+  if (input?.trim() !== 'DELETE') {
+    if (input !== null) showToast('Type DELETE exactly to confirm', 'error', 3000);
+    return;
+  }
+  try {
+    showToast('Deleting account...', 'info', 3000);
+    // Delete from user_data table first
+    await db.from('user_data').delete().eq('id', currentUser.id);
+    // Sign out (can't delete auth user from client-side without service role)
+    await db.auth.signOut();
+    showToast('Account data deleted. Please contact support to fully remove your auth account.', 'info', 6000);
+  } catch(e) {
+    showToast('Error deleting account', 'error', 3000);
+    console.error(e);
+  }
 }
 
 function openStartingBalanceEditor() {
@@ -2504,20 +2606,20 @@ function goalPlantSVG(pct) {
 
 function renderSetup() {
   const step = state.setupStep || 1;
-  const totalSteps = 5;
-  const pct = ((step - 1) / totalSteps) * 100;
+  const TOTAL = 6;
+  const pct = Math.round(((step - 1) / TOTAL) * 100);
+  const sym = cur();
 
   let content = '';
 
   if (step === 1) {
-    // Welcome
     content = `
     <div class="setup-hero">
       ${lotusSVG(80)}
-      <div class="brand" style="font-size:32px;margin-top:10px;">Welcome to Sprout</div>
-      <div class="brand-cn" style="font-size:14px;opacity:0.6;">发芽</div>
-      <div style="font-size:13px;color:var(--cream-dim);text-align:center;margin-top:16px;line-height:1.7;max-width:280px;">
-        Let's get you set up in a few quick steps so Sprout can work best for you.
+      <div class="brand" style="font-size:32px;margin-top:12px;">Welcome to Sprout</div>
+      <div class="brand-cn" style="font-size:14px;opacity:0.5;margin-top:2px;">发芽</div>
+      <div style="font-size:13px;color:var(--cream-dim);text-align:center;margin-top:18px;line-height:1.8;max-width:270px;">
+        Your personal finance tracker. Let's get you set up in a few quick steps.
       </div>
     </div>
     <div class="setup-actions">
@@ -2525,41 +2627,40 @@ function renderSetup() {
     </div>`;
 
   } else if (step === 2) {
-    // Name + currency
     content = `
     <div class="setup-step-header">
       <div class="setup-step-icon">👤</div>
-      <div class="setup-step-title">What's your name?</div>
-      <div class="setup-step-sub">We'll use this to personalise your experience.</div>
+      <div class="setup-step-title">Your Profile</div>
+      <div class="setup-step-sub">Tell us a bit about yourself to personalise your experience.</div>
     </div>
     <div class="setup-body">
-      <div class="field-label">Name</div>
-      <input type="text" id="setup-name" class="auth-input" placeholder="e.g. Alex" value="${escapeHtml(state.userName || '')}">
-      <div class="field-label" style="margin-top:16px;">Currency</div>
+      <div class="field-label">Your name</div>
+      <input type="text" id="setup-name" class="auth-input" placeholder="e.g. Sarah" value="${escapeHtml(state.userName || '')}" style="margin-bottom:14px;">
+      <div class="field-label">Bio / tagline <span style="opacity:0.5;font-size:10px;">optional</span></div>
+      <input type="text" id="setup-bio" class="auth-input" placeholder="e.g. Saving for my first home 🏠" value="${escapeHtml(state.userBio || '')}" style="margin-bottom:14px;">
+      <div class="field-label">Currency</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px;">
         ${['AUD','USD','GBP','EUR','NZD','SGD'].map(c => `
-          <button onclick="state.currency='${c}';render();" style="padding:10px;border-radius:10px;border:1px solid ${state.currency===c ? 'rgba(127,185,138,0.6)' : 'rgba(255,255,255,0.12)'};background:${state.currency===c ? 'rgba(127,185,138,0.25)' : 'rgba(255,255,255,0.05)'};color:var(--cream);font-size:13px;font-weight:${state.currency===c ? '700' : '400'};font-family:'Poppins',sans-serif;cursor:pointer;">${c}</button>`).join('')}
+          <button onclick="state.currency='${c}';render();" style="padding:10px 6px;border-radius:10px;border:1.5px solid ${state.currency===c?'rgba(127,185,138,0.7)':'rgba(255,255,255,0.1)'};background:${state.currency===c?'rgba(127,185,138,0.2)':'rgba(255,255,255,0.04)'};color:var(--cream);font-size:13px;font-weight:${state.currency===c?'700':'400'};font-family:'Poppins',sans-serif;cursor:pointer;">${c}</button>`).join('')}
       </div>
     </div>
     <div class="setup-actions">
-      <button class="auth-btn" onclick="saveSetupName()">Next →</button>
+      <button class="auth-btn" onclick="saveSetupProfile()">Next →</button>
     </div>`;
 
   } else if (step === 3) {
-    // Starting balance
     content = `
     <div class="setup-step-header">
       <div class="setup-step-icon">🏦</div>
       <div class="setup-step-title">Starting Balance</div>
-      <div class="setup-step-sub">Enter your current bank balance so Sprout can track your net worth.</div>
+      <div class="setup-step-sub">Enter your current total bank balance so Sprout can track your net worth accurately.</div>
     </div>
     <div class="setup-body">
-      <div class="field-label">Current balance</div>
-      <div class="amount-wrap">
-        <span>${state.currency === 'GBP' ? '£' : state.currency === 'EUR' ? '€' : '$'}</span>
-        <input type="number" id="setup-balance" class="auth-input" placeholder="0.00" value="${state.startingBalance || ''}">
+      <div class="amount-wrap" style="margin-top:4px;">
+        <span>${sym}</span>
+        <input type="number" id="setup-balance" placeholder="0.00" value="${state.startingBalance > 0 ? state.startingBalance : ''}">
       </div>
-      <div style="font-size:11px;color:var(--cream-dim);margin-top:10px;">This is your total balance across all accounts. You can change it anytime in Settings.</div>
+      <div style="font-size:11px;color:var(--cream-dim);margin-top:10px;line-height:1.6;">This includes all accounts combined — savings, everyday, etc. You can update it anytime in Account settings.</div>
     </div>
     <div class="setup-actions">
       <button class="auth-btn" onclick="saveSetupBalance()">Next →</button>
@@ -2567,35 +2668,32 @@ function renderSetup() {
     </div>`;
 
   } else if (step === 4) {
-    // Budget mode + budgets
     const isFixed = state.budgetMode === 'fixed';
     content = `
     <div class="setup-step-header">
       <div class="setup-step-icon">📊</div>
       <div class="setup-step-title">Budget Style</div>
-      <div class="setup-step-sub">How do you want to set your monthly budgets?</div>
+      <div class="setup-step-sub">How would you like to set your monthly budgets?</div>
     </div>
     <div class="setup-body">
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
-        <button onclick="state.budgetMode='fixed';render();" style="text-align:left;padding:14px 16px;border-radius:14px;border:2px solid ${isFixed ? 'rgba(127,185,138,0.6)' : 'rgba(255,255,255,0.1)'};background:${isFixed ? 'rgba(127,185,138,0.15)' : 'rgba(255,255,255,0.04)'};cursor:pointer;font-family:'Poppins',sans-serif;">
-          <div style="font-size:13px;font-weight:700;color:var(--cream);">💰 Fixed Monthly</div>
-          <div style="font-size:11px;color:var(--cream-dim);margin-top:3px;">Set a fixed dollar amount per category each month. Best for stable income.</div>
+        <button onclick="state.budgetMode='fixed';render();" style="text-align:left;padding:14px 16px;border-radius:14px;border:2px solid ${isFixed?'rgba(127,185,138,0.6)':'rgba(255,255,255,0.1)'};background:${isFixed?'rgba(127,185,138,0.15)':'rgba(255,255,255,0.04)'};cursor:pointer;font-family:'Poppins',sans-serif;">
+          <div style="font-size:14px;font-weight:700;color:var(--cream);">💰 Fixed Monthly</div>
+          <div style="font-size:11px;color:var(--cream-dim);margin-top:4px;line-height:1.5;">Set a fixed dollar amount per category. Best for stable income (salary, etc).</div>
         </button>
-        <button onclick="state.budgetMode='percentage';render();" style="text-align:left;padding:14px 16px;border-radius:14px;border:2px solid ${!isFixed ? 'rgba(127,185,138,0.6)' : 'rgba(255,255,255,0.1)'};background:${!isFixed ? 'rgba(127,185,138,0.15)' : 'rgba(255,255,255,0.04)'};cursor:pointer;font-family:'Poppins',sans-serif;">
-          <div style="font-size:13px;font-weight:700;color:var(--cream);">📈 Income-Based %</div>
-          <div style="font-size:11px;color:var(--cream-dim);margin-top:3px;">Budgets auto-adjust as a % of what you earn. Best for variable/freelance income.</div>
+        <button onclick="state.budgetMode='percentage';render();" style="text-align:left;padding:14px 16px;border-radius:14px;border:2px solid ${!isFixed?'rgba(127,185,138,0.6)':'rgba(255,255,255,0.1)'};background:${!isFixed?'rgba(127,185,138,0.15)':'rgba(255,255,255,0.04)'};cursor:pointer;font-family:'Poppins',sans-serif;">
+          <div style="font-size:14px;font-weight:700;color:var(--cream);">📈 Income-Based %</div>
+          <div style="font-size:11px;color:var(--cream-dim);margin-top:4px;line-height:1.5;">Budgets auto-scale as a % of income. Perfect for freelancers or variable income.</div>
         </button>
       </div>
-      <div style="font-size:12px;font-weight:600;margin-bottom:10px;">Set your budgets</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--cream-dim);">DEFAULT BUDGETS</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
         ${Object.keys(state.budgets).map(cat => `
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="flex:1;font-size:13px;">${cat}</div>
-            <div class="amount-wrap" style="width:130px;flex-shrink:0;">
-              ${!isFixed ? '' : `<span style="font-size:12px;">${state.currency === 'GBP' ? '£' : state.currency === 'EUR' ? '€' : '$'}</span>`}
-              <input type="number" value="${isFixed ? state.budgets[cat] : (state.budgetsPercentage[cat] || '')}" 
-                placeholder="${isFixed ? '0' : '0'}"
-                oninput="isFixed=${isFixed};if(isFixed){state.budgets['${cat}']=parseFloat(this.value)||0}else{state.budgetsPercentage['${cat}']=parseFloat(this.value)||0}">
+            <div class="amount-wrap" style="width:120px;flex-shrink:0;">
+              ${isFixed ? `<span style="font-size:12px;">${sym}</span>` : ''}
+              <input type="number" value="${isFixed ? state.budgets[cat] : (state.budgetsPercentage[cat] || '')}" placeholder="0" oninput="${isFixed ? `state.budgets['${cat}']=parseFloat(this.value)||0` : `state.budgetsPercentage['${cat}']=parseFloat(this.value)||0`}">
               ${!isFixed ? `<span style="font-size:12px;color:var(--cream-dim);">%</span>` : ''}
             </div>
           </div>`).join('')}
@@ -2607,24 +2705,23 @@ function renderSetup() {
     </div>`;
 
   } else if (step === 5) {
-    // Goals setup
     const setupGoals = state.setupGoals || [];
     content = `
     <div class="setup-step-header">
       <div class="setup-step-icon">🎯</div>
-      <div class="setup-step-title">Set Your Goals</div>
-      <div class="setup-step-sub">What are you saving for? You can add more later.</div>
+      <div class="setup-step-title">Your Goals</div>
+      <div class="setup-step-sub">What are you saving for? Add as many as you like — you can always add more later.</div>
     </div>
     <div class="setup-body">
-      <div style="display:flex;flex-direction:column;gap:8px;" id="setup-goals-list">
+      <div style="display:flex;flex-direction:column;gap:8px;">
         ${setupGoals.map((g, i) => `
           <div style="display:flex;gap:8px;align-items:center;">
-            <input type="text" value="${escapeHtml(g.name)}" placeholder="Goal name" oninput="state.setupGoals[${i}].name=this.value" style="flex:1;">
-            <div class="amount-wrap" style="width:110px;flex-shrink:0;">
-              <span style="font-size:12px;">$</span>
-              <input type="number" value="${g.goal || ''}" placeholder="Amount" oninput="state.setupGoals[${i}].goal=parseFloat(this.value)||0">
+            <input type="text" value="${escapeHtml(g.name)}" placeholder="Goal name (e.g. Europe Trip)" oninput="state.setupGoals[${i}].name=this.value" style="flex:1;font-size:12px;">
+            <div class="amount-wrap" style="width:100px;flex-shrink:0;">
+              <span style="font-size:12px;">${sym}</span>
+              <input type="number" value="${g.goal || ''}" placeholder="0" oninput="state.setupGoals[${i}].goal=parseFloat(this.value)||0" style="font-size:12px;">
             </div>
-            <button onclick="state.setupGoals.splice(${i},1);render();" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;padding:4px;">✕</button>
+            <button onclick="state.setupGoals.splice(${i},1);render();" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0;">✕</button>
           </div>`).join('')}
       </div>
       <button onclick="if(!state.setupGoals)state.setupGoals=[];state.setupGoals.push({name:'',goal:0,saved:0});render();" style="width:100%;margin-top:12px;background:rgba(127,185,138,0.1);border:1px dashed rgba(127,185,138,0.4);color:var(--cream-dim);padding:10px;border-radius:10px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;">+ Add a goal</button>
@@ -2635,52 +2732,55 @@ function renderSetup() {
     </div>`;
 
   } else if (step === 6) {
-    // Tutorial
     const tips = [
-      { icon: '🏦', title: 'Track transactions', desc: 'Tap the + button to log income and expenses. Assign categories to track your spending.' },
-      { icon: '📊', title: 'Set budgets', desc: 'Go to Budget → Budget tab to set spending limits per category. Watch the bars fill up.' },
-      { icon: '🎯', title: 'Save for goals', desc: 'In Budget → Goal tab, create savings goals. Allocate income directly to them when adding transactions.' },
-      { icon: '🌱', title: 'Watch your plants grow', desc: 'Each goal has a plant that grows as you save. Complete a goal to see it bloom 🌸' },
-      { icon: '🔁', title: 'Track subscriptions', desc: 'Account → Subscriptions to track recurring costs. See how much they cost per month.' },
-      { icon: '🏅', title: 'Earn badges', desc: 'Account → Achievements to see all badges. You\'ll unlock them automatically as you use the app.' },
+      { icon: '💸', title: 'Log transactions', desc: 'Tap the + button at the bottom to log income and expenses. Assign a category to track your spending patterns.' },
+      { icon: '📊', title: 'Set budgets', desc: 'Head to the Budget tab to set spending limits per category. Bars fill up as you spend — red means over budget.' },
+      { icon: '🎯', title: 'Save for goals', desc: 'Create goals in Budget → Goal. When adding income you can split a percentage directly into your goals.' },
+      { icon: '🌱', title: 'Watch plants grow', desc: 'Each goal has a living plant that grows as you save — from seed all the way to a blooming flower at 100% 🌸' },
+      { icon: '🔁', title: 'Track subscriptions', desc: 'Account → Subscriptions to track Netflix, Spotify and more. See your total monthly recurring costs at a glance.' },
+      { icon: '🏅', title: 'Earn achievements', desc: 'Badges unlock automatically as you use Sprout — check Account → Achievements to see what you\'ve earned!' },
     ];
     const tipIdx = state.tutorialTip || 0;
     const tip = tips[tipIdx];
     const isLast = tipIdx >= tips.length - 1;
     content = `
-    <div class="setup-hero" style="gap:0;">
-      <div style="font-size:56px;margin-bottom:16px;">${tip.icon}</div>
-      <div style="font-size:18px;font-weight:700;margin-bottom:10px;text-align:center;">${tip.title}</div>
-      <div style="font-size:13px;color:var(--cream-dim);text-align:center;line-height:1.7;max-width:280px;">${tip.desc}</div>
-      <div style="display:flex;gap:6px;margin-top:24px;">
-        ${tips.map((_, i) => `<div style="width:${i===tipIdx?'20px':'8px'};height:8px;border-radius:4px;background:${i===tipIdx?'rgba(127,185,138,0.9)':'rgba(255,255,255,0.2)'};transition:all .3s;"></div>`).join('')}
+    <div class="setup-hero" style="padding-top:0;">
+      <div style="font-size:60px;margin-bottom:18px;line-height:1;">${tip.icon}</div>
+      <div style="font-size:19px;font-weight:700;margin-bottom:12px;text-align:center;">${tip.title}</div>
+      <div style="font-size:13px;color:var(--cream-dim);text-align:center;line-height:1.8;max-width:280px;">${tip.desc}</div>
+      <div style="display:flex;gap:8px;margin-top:28px;align-items:center;">
+        ${tips.map((_, i) => `<div style="width:${i===tipIdx?'24px':'8px'};height:8px;border-radius:4px;background:${i===tipIdx?'rgba(127,185,138,0.9)':'rgba(255,255,255,0.2)'};transition:all .35s ease;"></div>`).join('')}
       </div>
     </div>
     <div class="setup-actions">
-      <button class="auth-btn" onclick="${isLast ? "finishTutorial()" : "state.tutorialTip=(state.tutorialTip||0)+1;render();"}">
-        ${isLast ? 'Start using Sprout 🌿' : 'Next tip →'}
+      <button class="auth-btn" onclick="${isLast ? 'finishTutorial()' : 'state.tutorialTip=(state.tutorialTip||0)+1;render();'}">
+        ${isLast ? 'Start using Sprout 🌿' : 'Next →'}
       </button>
       ${!isLast ? `<button class="auth-switch" onclick="finishTutorial()">Skip tutorial</button>` : ''}
     </div>`;
   }
 
+  const showProgress = step > 1 && step < 6;
   return `
   <div class="setup-screen">
-    ${step > 1 ? `
+    ${showProgress ? `
     <div class="setup-progress">
       <div style="height:100%;width:${pct}%;background:rgba(127,185,138,0.7);border-radius:3px;transition:width .5s ease;"></div>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
-      ${step > 2 ? `<button onclick="state.setupStep--;render();" class="back-btn">${ICON.back} Back</button>` : `<div></div>`}
-      <div style="font-size:11px;color:var(--cream-dim);">Step ${step - 1} of ${totalSteps - 1}</div>
-    </div>` : ''}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      ${step > 2 ? `<button onclick="state.setupStep--;render();" class="back-btn" style="padding:6px 10px;font-size:12px;">${ICON.back} Back</button>` : `<div></div>`}
+      <div style="font-size:11px;color:var(--cream-dim);">Step ${step - 1} of ${TOTAL - 1}</div>
+    </div>` : step === 6 ? '<div style="height:20px;"></div>' : ''}
     ${content}
   </div>`;
 }
 
-function saveSetupName() {
+function saveSetupProfile() {
   const name = document.getElementById('setup-name')?.value?.trim();
-  if (name) state.userName = name;
+  const bio = document.getElementById('setup-bio')?.value?.trim();
+  if (!name) { showToast('Please enter your name', 'error', 2500); return; }
+  state.userName = name;
+  if (bio) { state.userBio = bio; state._nameChanged = true; }
   state.setupStep = 3;
   render();
 }
@@ -2696,7 +2796,6 @@ function saveSetupBalance() {
 }
 
 function completeSetup() {
-  // Save any goals entered in setup
   if (state.setupGoals?.length > 0) {
     state.setupGoals.filter(g => g.name && g.goal > 0).forEach(g => {
       state.goals.push({ id: state.nextId++, name: g.name, goal: g.goal, saved: 0 });
@@ -2705,6 +2804,7 @@ function completeSetup() {
   }
   state.setupStep = 6;
   state.tutorialTip = 0;
+  saveState();
   render();
 }
 
@@ -2713,7 +2813,7 @@ function finishTutorial() {
   state.screen = 'home';
   delete state.tutorialTip;
   saveState();
-  showToast('Welcome to Sprout! 🌱', 'success', 3000);
+  showToast(`Welcome to Sprout, ${state.userName || 'there'}! 🌱`, 'success', 3500);
   setTimeout(() => checkAchievements(), 1000);
   render();
 }
@@ -3401,27 +3501,26 @@ async function initApp() {
     if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
       currentUser = session.user;
       await new Promise(r => setTimeout(r, 300));
-      // Reset to clean default state before loading (prevents old data bleeding in)
       Object.assign(state, DEFAULT_STATE);
       await loadState();
       if (!state.unlockedBadges) state.unlockedBadges = [];
-      if (state.screen === 'auth') {
-        if (!state.setupComplete) {
-          // Pre-fill name from signup form or extract from email
-          if (pendingSignupName) {
-            state.userName = pendingSignupName;
-            pendingSignupName = '';
-          } else if (!state.userName && currentUser.email) {
-            // Use part before @ as default name, capitalised
-            const emailName = currentUser.email.split('@')[0].replace(/[._]/g, ' ');
-            state.userName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-          }
-          state.screen = 'setup';
-          state.setupStep = 1;
-        } else {
-          state.screen = 'splash';
+
+      if (!state.setupComplete) {
+        // New user — pre-fill name then show setup
+        if (pendingSignupName) {
+          state.userName = pendingSignupName;
+          pendingSignupName = '';
+        } else if (!state.userName && currentUser.email) {
+          const emailName = currentUser.email.split('@')[0].replace(/[._-]/g, ' ');
+          state.userName = emailName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
+        state.screen = 'setup';
+        state.setupStep = 1;
+      } else {
+        // Returning user — go to splash
+        state.screen = 'splash';
       }
+
       render();
       setTimeout(() => checkAchievements(), 2000);
       if (event === 'SIGNED_IN' && state.setupComplete) showToast('Welcome back! ☁️', 'success', 2500);
