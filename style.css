@@ -109,9 +109,9 @@ body {
   }
 }
 
-/* Browser mode — extra bottom padding for browser toolbar */
-@media (max-width: 500px) and (display-mode: browser) {
-  #bottom-nav {
+/* is-browser class applied via JS when NOT running as PWA */
+@media (max-width: 500px) {
+  body.is-browser #bottom-nav {
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
   }
 }

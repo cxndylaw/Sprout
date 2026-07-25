@@ -561,6 +561,25 @@ function animateNumberEl(el, target) {
 const isPWA = window.matchMedia('(display-mode: standalone)').matches 
   || window.navigator.standalone === true;
 
+// Apply body class immediately so CSS can target browser vs PWA reliably
+if (!isPWA) document.body.classList.add('is-browser');
+
+// For webapp: ensure #phone fills height correctly using JS
+function fixPhoneHeight() {
+  if (window.innerWidth > 500) return;
+  const phone = document.getElementById('phone');
+  if (!phone) return;
+  if (isPWA) {
+    // PWA: fill full window height edge to edge
+    phone.style.height = window.innerHeight + 'px';
+  }
+}
+
+window.addEventListener('resize', fixPhoneHeight);
+// Run after DOM is ready
+document.addEventListener('DOMContentLoaded', fixPhoneHeight);
+setTimeout(fixPhoneHeight, 100);
+
 function shouldShowInstallBanner() {
   if (isPWA) return false;
   if (window.innerWidth > 500) return false;
