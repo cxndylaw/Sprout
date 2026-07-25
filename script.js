@@ -92,104 +92,43 @@ function daysAgo(n) {
   return d.toISOString().slice(0, 10);
 }
 
-let state = {
+// Clean default state for new users — no dummy data
+const DEFAULT_STATE = {
   screen: 'splash',
   budgetTab: 'budget',
-  userName: 'Alex',
+  userName: '',
   currency: 'AUD',
   notificationsOn: true,
   balanceHidden: false,
   period: 'thisMonth',
-  startingBalance: 150302,
-  txns: [
-    { id: 1,  desc: 'Monthly salary',         amount: 6800,   type: 'income',  cat: 'Salary',     date: daysAgo(2)  },
-    { id: 2,  desc: 'Freelance project',       amount: 1250,   type: 'income',  cat: 'Freelance',  date: daysAgo(8)  },
-    { id: 3,  desc: 'Side project payment',    amount: 480,    type: 'income',  cat: 'Freelance',  date: daysAgo(15) },
-    { id: 4,  desc: 'Coles',                   amount: 134.50, type: 'expense', cat: 'Groceries',  date: daysAgo(1)  },
-    { id: 5,  desc: 'Woolworths',              amount: 89.20,  type: 'expense', cat: 'Groceries',  date: daysAgo(7)  },
-    { id: 6,  desc: 'Dinner with friends',     amount: 68.00,  type: 'expense', cat: 'Eating Out', date: daysAgo(3)  },
-    { id: 7,  desc: 'Sushi train',             amount: 42.50,  type: 'expense', cat: 'Eating Out', date: daysAgo(10) },
-    { id: 8,  desc: 'Coffee',                  amount: 6.50,   type: 'expense', cat: 'Eating Out', date: daysAgo(4)  },
-    { id: 9,  desc: 'Petrol',                  amount: 85.00,  type: 'expense', cat: 'Transport',  date: daysAgo(5)  },
-    { id: 10, desc: 'Uber',                    amount: 22.40,  type: 'expense', cat: 'Transport',  date: daysAgo(9)  },
-    { id: 11, desc: 'H&M',                     amount: 120.00, type: 'expense', cat: 'Shopping',   date: daysAgo(6)  },
-    { id: 12, desc: 'Amazon order',            amount: 54.99,  type: 'expense', cat: 'Shopping',   date: daysAgo(11) },
-    { id: 13, desc: 'Gym membership',          amount: 49.00,  type: 'expense', cat: 'Health',     date: daysAgo(2)  },
-    { id: 14, desc: 'Pharmacy',                amount: 28.60,  type: 'expense', cat: 'Health',     date: daysAgo(14) },
-    { id: 15, desc: "Friend's birthday gift",  amount: 75.00,  type: 'expense', cat: 'Gifts',      date: daysAgo(12) },
-    { id: 16, desc: 'Netflix',                 amount: 22.99,  type: 'expense', cat: 'Subscription', date: daysAgo(1) },
-    { id: 17, desc: 'Spotify',                 amount: 11.99,  type: 'expense', cat: 'Subscription', date: daysAgo(1) },
-    { id: 18, desc: 'Monthly salary',          amount: 6800,   type: 'income',  cat: 'Salary',     date: daysAgo(33) },
-    { id: 19, desc: 'Coles',                   amount: 112.30, type: 'expense', cat: 'Groceries',  date: daysAgo(28) },
-    { id: 20, desc: 'Restaurant',              amount: 95.00,  type: 'expense', cat: 'Eating Out', date: daysAgo(25) },
-    { id: 21, desc: 'Petrol',                  amount: 78.50,  type: 'expense', cat: 'Transport',  date: daysAgo(30) },
-    { id: 22, desc: 'Zara',                    amount: 189.00, type: 'expense', cat: 'Shopping',   date: daysAgo(35) },
-    { id: 23, desc: 'Monthly salary',          amount: 6800,   type: 'income',  cat: 'Salary',     date: daysAgo(63) },
-    { id: 24, desc: 'Freelance project',       amount: 2100,   type: 'income',  cat: 'Freelance',  date: daysAgo(55) },
-    { id: 25, desc: 'Woolworths',              amount: 145.70, type: 'expense', cat: 'Groceries',  date: daysAgo(58) },
-    { id: 26, desc: 'Dinner out',              amount: 82.00,  type: 'expense', cat: 'Eating Out', date: daysAgo(60) },
-    { id: 27, desc: 'Clothing haul',           amount: 230.00, type: 'expense', cat: 'Shopping',   date: daysAgo(52) },
-  ],
+  startingBalance: 0,
+  txns: [],
   budgets: { 
-    'Shopping':   300, 
-    'Groceries':  400, 
-    'Eating Out': 200, 
-    'Health':     100,
-    'Transport':  250,
-    'Gifts':      200, 
-    'Misc':       150
+    'Shopping': 300, 'Groceries': 400, 'Eating Out': 200, 
+    'Health': 100, 'Transport': 250, 'Gifts': 200, 'Misc': 150
   },
-  goals: [
-    { id: 1, name: 'Europe Trip',        goal: 8000,  saved: 3200  },
-    { id: 2, name: 'New MacBook',        goal: 3499,  saved: 1800  },
-    { id: 3, name: 'Emergency Fund',     goal: 10000, saved: 6500  },
-    { id: 4, name: 'House Down Payment', goal: 80000, saved: 22000 }
-  ],
-  nextId: 28,
+  goals: [],
+  nextId: 1,
   form: { type: 'expense', desc: '', amount: '', date: daysAgo(0), cat: '', moreOpen: false, allocate: false, allocateGoalId: null, splitGoals: [] },
-  showEditBudget: false,
-  editBudgetData: null,
-  showEditGoal: false,
-  editGoalData: null,
-  warningItems: [],
-  showWarning: false,
-  showAddGoal: false,
-  showEditBudgets: false,
-  showEditBalance: false,
-  editBalanceInput: '0',
-  showProfileEditor: false,
+  showEditBudget: false, editBudgetData: null,
+  showEditGoal: false, editGoalData: null,
+  warningItems: [], showWarning: false,
+  showAddGoal: false, showEditBudgets: false, showEditBalance: false,
+  editBalanceInput: '0', showProfileEditor: false,
   userBio: 'Personal Finance Tracker',
-  graphType: 'category',
-  budgetSort: 'spent',
-  goalSort: 'progress',
-  trendPeriod: 'month',
-  bankFilterCat: null,
-  graphPeriod: 'thisMonth',
-  bankSearchQuery: '',
-  bankPeriod: 'thisMonth',
-  bankFilterType: 'all',
-  userAvatar: null,
-  budgetMode: 'fixed',
-  budgetsPercentage: {},
-  selectedTxnId: null,
-  unlockedBadges: [],
-  badgeDates: {},
-  firstLogin: true,
-  selectedBadgeId: null,
-  showResetModal: false,
-  resetStep: 0,
-  subscriptions: [
-    { id: 1, name: 'Netflix',      amount: 22.99, cycle: 'monthly', cat: 'Entertainment', color: '#E50914', emoji: '🎬' },
-    { id: 2, name: 'Spotify',      amount: 11.99, cycle: 'monthly', cat: 'Entertainment', color: '#1DB954', emoji: '🎵' },
-    { id: 3, name: 'iCloud+',      amount: 4.49,  cycle: 'monthly', cat: 'Storage',       color: '#007AFF', emoji: '☁️' },
-    { id: 4, name: 'ChatGPT Plus', amount: 29.99, cycle: 'monthly', cat: 'Productivity',  color: '#10A37F', emoji: '🤖' },
-    { id: 5, name: 'YouTube Premium', amount: 18.99, cycle: 'monthly', cat: 'Entertainment', color: '#FF0000', emoji: '▶️' },
-  ],
-  nextSubId: 6,
-  showAddSub: false,
-  showEditSub: false,
-  editSubData: null
+  graphType: 'category', budgetSort: 'spent', goalSort: 'progress',
+  trendPeriod: 'month', bankFilterCat: null, graphPeriod: 'thisMonth',
+  bankSearchQuery: '', bankPeriod: 'thisMonth', bankFilterType: 'all',
+  userAvatar: null, budgetMode: 'fixed', budgetsPercentage: {},
+  selectedTxnId: null, unlockedBadges: [], badgeDates: {},
+  firstLogin: true, selectedBadgeId: null,
+  showResetModal: false, resetStep: 0,
+  setupComplete: false, setupStep: 0,
+  subscriptions: [], nextSubId: 1,
+  showAddSub: false, showEditSub: false, editSubData: null
 };
+
+let state = { ...DEFAULT_STATE };
 
 let displayedBalance = null; // for count-up animation
 let lastScreen = null; // track screen changes for page-enter animation
@@ -204,55 +143,49 @@ let currentUser = null;
 let saveTimeout = null;
 
 async function saveState() {
-  // Always save to localStorage as instant fallback
-  try { localStorage.setItem('sprout_data', JSON.stringify(state)); } catch(e) {}
+  // Always save to localStorage as instant fallback, tagged with userId
+  try { 
+    const saveData = { ...state, _userId: currentUser?.id || null };
+    localStorage.setItem('sprout_data', JSON.stringify(saveData)); 
+  } catch(e) {}
   if (!currentUser) return;
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async () => {
     try {
-      // Always get a fresh session before DB calls to ensure JWT is attached
       const { data: { session } } = await db.auth.getSession();
       if (!session) return;
-      const { error } = await db.from('user_data').upsert({
-        id: currentUser.id,
-        data: state,
-        updated_at: new Date().toISOString()
-      });
+      const { error } = await db.from('user_data')
+        .upsert(
+          { id: currentUser.id, data: state, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
       if (error) console.error('Supabase save error:', error.message);
     } catch(e) { console.error('Supabase save error:', e); }
   }, 1200);
 }
 
 async function loadState() {
-  if (!currentUser) {
-    try {
-      const saved = localStorage.getItem('sprout_data');
-      if (saved) Object.assign(state, JSON.parse(saved));
-    } catch(e) {}
-    return;
-  }
+  if (!currentUser) return;
   try {
-    // Get fresh session to ensure JWT is attached
     const { data: { session } } = await db.auth.getSession();
     if (!session) return;
 
-    const { data, error } = await db.from('user_data').select('data').eq('id', currentUser.id).single();
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found (new user)
+    const { data, error } = await db.from('user_data').select('data').eq('id', currentUser.id).maybeSingle();
+    
+    if (error) {
       console.error('Supabase load error:', error.message);
       return;
     }
+
     if (data?.data) {
-      Object.assign(state, data.data);
-    } else {
-      // New user — migrate localStorage if exists
-      const local = localStorage.getItem('sprout_data');
-      if (local) {
-        Object.assign(state, JSON.parse(local));
-        await db.from('user_data').upsert({ id: currentUser.id, data: state, updated_at: new Date().toISOString() });
-        localStorage.removeItem('sprout_data');
-        showToast('Your data has been synced to the cloud ☁️', 'success', 3000);
-      }
+      // Existing user — reset to clean default then load their data
+      Object.assign(state, DEFAULT_STATE, data.data);
+      localStorage.removeItem('sprout_data');
     }
+    // New user (no Supabase data) — state stays as DEFAULT_STATE, setup flow handles the rest
+    // Never pull from localStorage when logged in (prevents account bleed)
+    localStorage.removeItem('sprout_data');
+    
   } catch(e) { console.error('Supabase load error:', e); }
 }
 
@@ -355,6 +288,8 @@ async function signIn() {
   if (error) showToast(error.message, 'error', 4000);
 }
 
+let pendingSignupName = ''; // Store name from signup form to use in setup
+
 async function signUp() {
   const email = document.getElementById('auth-email')?.value?.trim();
   const password = document.getElementById('auth-password')?.value;
@@ -386,7 +321,8 @@ async function signUp() {
     return;
   }
 
-  if (name) state.userName = name;
+  // Store name so setup step 2 pre-fills it
+  if (name) pendingSignupName = name;
 
   showToast('Account created! Check your email to confirm.', 'success', 5000);
 }
@@ -502,6 +438,11 @@ function render() {
   }
   if (state.screen === 'auth') {
     c.innerHTML = renderAuth();
+    navWrap.innerHTML = '';
+    return;
+  }
+  if (state.screen === 'setup') {
+    c.innerHTML = renderSetup();
     navWrap.innerHTML = '';
     return;
   }
@@ -2559,7 +2500,223 @@ function goalPlantSVG(pct) {
   return `<svg viewBox="0 0 64 64" width="48" height="48" style="overflow:visible;">${soil}${stem}${plant}</svg>`;
 }
 
-/* ================= ACHIEVEMENTS ================= */
+/* ================= SETUP FLOW ================= */
+
+function renderSetup() {
+  const step = state.setupStep || 1;
+  const totalSteps = 5;
+  const pct = ((step - 1) / totalSteps) * 100;
+
+  let content = '';
+
+  if (step === 1) {
+    // Welcome
+    content = `
+    <div class="setup-hero">
+      ${lotusSVG(80)}
+      <div class="brand" style="font-size:32px;margin-top:10px;">Welcome to Sprout</div>
+      <div class="brand-cn" style="font-size:14px;opacity:0.6;">发芽</div>
+      <div style="font-size:13px;color:var(--cream-dim);text-align:center;margin-top:16px;line-height:1.7;max-width:280px;">
+        Let's get you set up in a few quick steps so Sprout can work best for you.
+      </div>
+    </div>
+    <div class="setup-actions">
+      <button class="auth-btn" onclick="state.setupStep=2;render();">Let's go 🌱</button>
+    </div>`;
+
+  } else if (step === 2) {
+    // Name + currency
+    content = `
+    <div class="setup-step-header">
+      <div class="setup-step-icon">👤</div>
+      <div class="setup-step-title">What's your name?</div>
+      <div class="setup-step-sub">We'll use this to personalise your experience.</div>
+    </div>
+    <div class="setup-body">
+      <div class="field-label">Name</div>
+      <input type="text" id="setup-name" class="auth-input" placeholder="e.g. Alex" value="${escapeHtml(state.userName || '')}">
+      <div class="field-label" style="margin-top:16px;">Currency</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px;">
+        ${['AUD','USD','GBP','EUR','NZD','SGD'].map(c => `
+          <button onclick="state.currency='${c}';render();" style="padding:10px;border-radius:10px;border:1px solid ${state.currency===c ? 'rgba(127,185,138,0.6)' : 'rgba(255,255,255,0.12)'};background:${state.currency===c ? 'rgba(127,185,138,0.25)' : 'rgba(255,255,255,0.05)'};color:var(--cream);font-size:13px;font-weight:${state.currency===c ? '700' : '400'};font-family:'Poppins',sans-serif;cursor:pointer;">${c}</button>`).join('')}
+      </div>
+    </div>
+    <div class="setup-actions">
+      <button class="auth-btn" onclick="saveSetupName()">Next →</button>
+    </div>`;
+
+  } else if (step === 3) {
+    // Starting balance
+    content = `
+    <div class="setup-step-header">
+      <div class="setup-step-icon">🏦</div>
+      <div class="setup-step-title">Starting Balance</div>
+      <div class="setup-step-sub">Enter your current bank balance so Sprout can track your net worth.</div>
+    </div>
+    <div class="setup-body">
+      <div class="field-label">Current balance</div>
+      <div class="amount-wrap">
+        <span>${state.currency === 'GBP' ? '£' : state.currency === 'EUR' ? '€' : '$'}</span>
+        <input type="number" id="setup-balance" class="auth-input" placeholder="0.00" value="${state.startingBalance || ''}">
+      </div>
+      <div style="font-size:11px;color:var(--cream-dim);margin-top:10px;">This is your total balance across all accounts. You can change it anytime in Settings.</div>
+    </div>
+    <div class="setup-actions">
+      <button class="auth-btn" onclick="saveSetupBalance()">Next →</button>
+      <button class="auth-switch" onclick="state.setupStep=4;render();">Skip for now</button>
+    </div>`;
+
+  } else if (step === 4) {
+    // Budget mode + budgets
+    const isFixed = state.budgetMode === 'fixed';
+    content = `
+    <div class="setup-step-header">
+      <div class="setup-step-icon">📊</div>
+      <div class="setup-step-title">Budget Style</div>
+      <div class="setup-step-sub">How do you want to set your monthly budgets?</div>
+    </div>
+    <div class="setup-body">
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+        <button onclick="state.budgetMode='fixed';render();" style="text-align:left;padding:14px 16px;border-radius:14px;border:2px solid ${isFixed ? 'rgba(127,185,138,0.6)' : 'rgba(255,255,255,0.1)'};background:${isFixed ? 'rgba(127,185,138,0.15)' : 'rgba(255,255,255,0.04)'};cursor:pointer;font-family:'Poppins',sans-serif;">
+          <div style="font-size:13px;font-weight:700;color:var(--cream);">💰 Fixed Monthly</div>
+          <div style="font-size:11px;color:var(--cream-dim);margin-top:3px;">Set a fixed dollar amount per category each month. Best for stable income.</div>
+        </button>
+        <button onclick="state.budgetMode='percentage';render();" style="text-align:left;padding:14px 16px;border-radius:14px;border:2px solid ${!isFixed ? 'rgba(127,185,138,0.6)' : 'rgba(255,255,255,0.1)'};background:${!isFixed ? 'rgba(127,185,138,0.15)' : 'rgba(255,255,255,0.04)'};cursor:pointer;font-family:'Poppins',sans-serif;">
+          <div style="font-size:13px;font-weight:700;color:var(--cream);">📈 Income-Based %</div>
+          <div style="font-size:11px;color:var(--cream-dim);margin-top:3px;">Budgets auto-adjust as a % of what you earn. Best for variable/freelance income.</div>
+        </button>
+      </div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:10px;">Set your budgets</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${Object.keys(state.budgets).map(cat => `
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="flex:1;font-size:13px;">${cat}</div>
+            <div class="amount-wrap" style="width:130px;flex-shrink:0;">
+              ${!isFixed ? '' : `<span style="font-size:12px;">${state.currency === 'GBP' ? '£' : state.currency === 'EUR' ? '€' : '$'}</span>`}
+              <input type="number" value="${isFixed ? state.budgets[cat] : (state.budgetsPercentage[cat] || '')}" 
+                placeholder="${isFixed ? '0' : '0'}"
+                oninput="isFixed=${isFixed};if(isFixed){state.budgets['${cat}']=parseFloat(this.value)||0}else{state.budgetsPercentage['${cat}']=parseFloat(this.value)||0}">
+              ${!isFixed ? `<span style="font-size:12px;color:var(--cream-dim);">%</span>` : ''}
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="setup-actions">
+      <button class="auth-btn" onclick="state.setupStep=5;render();">Next →</button>
+      <button class="auth-switch" onclick="state.setupStep=5;render();">Skip for now</button>
+    </div>`;
+
+  } else if (step === 5) {
+    // Goals setup
+    const setupGoals = state.setupGoals || [];
+    content = `
+    <div class="setup-step-header">
+      <div class="setup-step-icon">🎯</div>
+      <div class="setup-step-title">Set Your Goals</div>
+      <div class="setup-step-sub">What are you saving for? You can add more later.</div>
+    </div>
+    <div class="setup-body">
+      <div style="display:flex;flex-direction:column;gap:8px;" id="setup-goals-list">
+        ${setupGoals.map((g, i) => `
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" value="${escapeHtml(g.name)}" placeholder="Goal name" oninput="state.setupGoals[${i}].name=this.value" style="flex:1;">
+            <div class="amount-wrap" style="width:110px;flex-shrink:0;">
+              <span style="font-size:12px;">$</span>
+              <input type="number" value="${g.goal || ''}" placeholder="Amount" oninput="state.setupGoals[${i}].goal=parseFloat(this.value)||0">
+            </div>
+            <button onclick="state.setupGoals.splice(${i},1);render();" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;padding:4px;">✕</button>
+          </div>`).join('')}
+      </div>
+      <button onclick="if(!state.setupGoals)state.setupGoals=[];state.setupGoals.push({name:'',goal:0,saved:0});render();" style="width:100%;margin-top:12px;background:rgba(127,185,138,0.1);border:1px dashed rgba(127,185,138,0.4);color:var(--cream-dim);padding:10px;border-radius:10px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;">+ Add a goal</button>
+    </div>
+    <div class="setup-actions">
+      <button class="auth-btn" onclick="completeSetup()">Finish Setup 🌱</button>
+      <button class="auth-switch" onclick="completeSetup()">Skip for now</button>
+    </div>`;
+
+  } else if (step === 6) {
+    // Tutorial
+    const tips = [
+      { icon: '🏦', title: 'Track transactions', desc: 'Tap the + button to log income and expenses. Assign categories to track your spending.' },
+      { icon: '📊', title: 'Set budgets', desc: 'Go to Budget → Budget tab to set spending limits per category. Watch the bars fill up.' },
+      { icon: '🎯', title: 'Save for goals', desc: 'In Budget → Goal tab, create savings goals. Allocate income directly to them when adding transactions.' },
+      { icon: '🌱', title: 'Watch your plants grow', desc: 'Each goal has a plant that grows as you save. Complete a goal to see it bloom 🌸' },
+      { icon: '🔁', title: 'Track subscriptions', desc: 'Account → Subscriptions to track recurring costs. See how much they cost per month.' },
+      { icon: '🏅', title: 'Earn badges', desc: 'Account → Achievements to see all badges. You\'ll unlock them automatically as you use the app.' },
+    ];
+    const tipIdx = state.tutorialTip || 0;
+    const tip = tips[tipIdx];
+    const isLast = tipIdx >= tips.length - 1;
+    content = `
+    <div class="setup-hero" style="gap:0;">
+      <div style="font-size:56px;margin-bottom:16px;">${tip.icon}</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:10px;text-align:center;">${tip.title}</div>
+      <div style="font-size:13px;color:var(--cream-dim);text-align:center;line-height:1.7;max-width:280px;">${tip.desc}</div>
+      <div style="display:flex;gap:6px;margin-top:24px;">
+        ${tips.map((_, i) => `<div style="width:${i===tipIdx?'20px':'8px'};height:8px;border-radius:4px;background:${i===tipIdx?'rgba(127,185,138,0.9)':'rgba(255,255,255,0.2)'};transition:all .3s;"></div>`).join('')}
+      </div>
+    </div>
+    <div class="setup-actions">
+      <button class="auth-btn" onclick="${isLast ? "finishTutorial()" : "state.tutorialTip=(state.tutorialTip||0)+1;render();"}">
+        ${isLast ? 'Start using Sprout 🌿' : 'Next tip →'}
+      </button>
+      ${!isLast ? `<button class="auth-switch" onclick="finishTutorial()">Skip tutorial</button>` : ''}
+    </div>`;
+  }
+
+  return `
+  <div class="setup-screen">
+    ${step > 1 ? `
+    <div class="setup-progress">
+      <div style="height:100%;width:${pct}%;background:rgba(127,185,138,0.7);border-radius:3px;transition:width .5s ease;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+      ${step > 2 ? `<button onclick="state.setupStep--;render();" class="back-btn">${ICON.back} Back</button>` : `<div></div>`}
+      <div style="font-size:11px;color:var(--cream-dim);">Step ${step - 1} of ${totalSteps - 1}</div>
+    </div>` : ''}
+    ${content}
+  </div>`;
+}
+
+function saveSetupName() {
+  const name = document.getElementById('setup-name')?.value?.trim();
+  if (name) state.userName = name;
+  state.setupStep = 3;
+  render();
+}
+
+function saveSetupBalance() {
+  const val = parseFloat(document.getElementById('setup-balance')?.value);
+  if (!isNaN(val) && val >= 0) {
+    state.startingBalance = val;
+    state._balanceSet = true;
+  }
+  state.setupStep = 4;
+  render();
+}
+
+function completeSetup() {
+  // Save any goals entered in setup
+  if (state.setupGoals?.length > 0) {
+    state.setupGoals.filter(g => g.name && g.goal > 0).forEach(g => {
+      state.goals.push({ id: state.nextId++, name: g.name, goal: g.goal, saved: 0 });
+    });
+    delete state.setupGoals;
+  }
+  state.setupStep = 6;
+  state.tutorialTip = 0;
+  render();
+}
+
+function finishTutorial() {
+  state.setupComplete = true;
+  state.screen = 'home';
+  delete state.tutorialTip;
+  saveState();
+  showToast('Welcome to Sprout! 🌱', 'success', 3000);
+  setTimeout(() => checkAchievements(), 1000);
+  render();
+}
 
 const ALL_BADGES = [
   // 🌱 Getting Started
@@ -3243,19 +3400,39 @@ async function initApp() {
 
     if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
       currentUser = session.user;
-      await new Promise(r => setTimeout(r, 300)); // wait for JWT to be set
+      await new Promise(r => setTimeout(r, 300));
+      // Reset to clean default state before loading (prevents old data bleeding in)
+      Object.assign(state, DEFAULT_STATE);
       await loadState();
       if (!state.unlockedBadges) state.unlockedBadges = [];
-      if (state.screen === 'auth') state.screen = 'splash';
+      if (state.screen === 'auth') {
+        if (!state.setupComplete) {
+          // Pre-fill name from signup form or extract from email
+          if (pendingSignupName) {
+            state.userName = pendingSignupName;
+            pendingSignupName = '';
+          } else if (!state.userName && currentUser.email) {
+            // Use part before @ as default name, capitalised
+            const emailName = currentUser.email.split('@')[0].replace(/[._]/g, ' ');
+            state.userName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+          }
+          state.screen = 'setup';
+          state.setupStep = 1;
+        } else {
+          state.screen = 'splash';
+        }
+      }
       render();
       setTimeout(() => checkAchievements(), 2000);
-      if (event === 'SIGNED_IN') showToast('Welcome to Sprout ☁️', 'success', 2500);
+      if (event === 'SIGNED_IN' && state.setupComplete) showToast('Welcome back! ☁️', 'success', 2500);
     } else if (event === 'INITIAL_SESSION' && !session) {
       // No session — stay on auth screen
       state.screen = 'auth';
       render();
     } else if (event === 'SIGNED_OUT') {
       currentUser = null;
+      localStorage.removeItem('sprout_data');
+      Object.assign(state, DEFAULT_STATE);
       state.screen = 'auth';
       render();
     }
