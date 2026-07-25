@@ -176,6 +176,8 @@ let state = {
   badgeDates: {},
   firstLogin: true,
   selectedBadgeId: null,
+  showResetModal: false,
+  resetStep: 0,
   subscriptions: [
     { id: 1, name: 'Netflix',      amount: 22.99, cycle: 'monthly', cat: 'Entertainment', color: '#E50914', emoji: '🎬' },
     { id: 2, name: 'Spotify',      amount: 11.99, cycle: 'monthly', cat: 'Entertainment', color: '#1DB954', emoji: '🎵' },
@@ -204,23 +206,25 @@ let saveTimeout = null;
 async function saveState() {
   // Always save to localStorage as instant fallback
   try { localStorage.setItem('sprout_data', JSON.stringify(state)); } catch(e) {}
-  // Debounce Supabase saves (don't hammer on every keystroke)
   if (!currentUser) return;
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async () => {
     try {
-      await db.from('user_data').upsert({
+      // Always get a fresh session before DB calls to ensure JWT is attached
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) return;
+      const { error } = await db.from('user_data').upsert({
         id: currentUser.id,
         data: state,
         updated_at: new Date().toISOString()
       });
+      if (error) console.error('Supabase save error:', error.message);
     } catch(e) { console.error('Supabase save error:', e); }
-  }, 800);
+  }, 1200);
 }
 
 async function loadState() {
   if (!currentUser) {
-    // Fallback to localStorage if not logged in
     try {
       const saved = localStorage.getItem('sprout_data');
       if (saved) Object.assign(state, JSON.parse(saved));
@@ -228,15 +232,22 @@ async function loadState() {
     return;
   }
   try {
+    // Get fresh session to ensure JWT is attached
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) return;
+
     const { data, error } = await db.from('user_data').select('data').eq('id', currentUser.id).single();
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found (new user)
+      console.error('Supabase load error:', error.message);
+      return;
+    }
     if (data?.data) {
       Object.assign(state, data.data);
     } else {
-      // New user — check if they have localStorage data to migrate
+      // New user — migrate localStorage if exists
       const local = localStorage.getItem('sprout_data');
       if (local) {
         Object.assign(state, JSON.parse(local));
-        // Save migrated data to Supabase
         await db.from('user_data').upsert({ id: currentUser.id, data: state, updated_at: new Date().toISOString() });
         localStorage.removeItem('sprout_data');
         showToast('Your data has been synced to the cloud ☁️', 'success', 3000);
@@ -348,12 +359,35 @@ async function signUp() {
   const email = document.getElementById('auth-email')?.value?.trim();
   const password = document.getElementById('auth-password')?.value;
   const name = document.getElementById('auth-name')?.value?.trim();
-  if (!email || !password) { showToast('Please enter email and password', 'error', 3000); return; }
-  if (password.length < 6) { showToast('Password must be at least 6 characters', 'error', 3000); return; }
+
+  if (!email || !password) {
+    showToast('Please enter email and password', 'error', 3000);
+    return;
+  }
+
+  if (password.length < 6) {
+    showToast('Password must be at least 6 characters', 'error', 3000);
+    return;
+  }
+
   showToast('Creating account...', 'info', 2000);
-  const { error } = await db.auth.signUp({ email, password });
-  if (error) { showToast(error.message, 'error', 4000); return; }
+
+  const { data, error } = await db.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: "https://sprout.cindy.dev"
+    }
+  });
+
+  if (error) {
+    console.error(error);
+    showToast(error.message, 'error', 4000);
+    return;
+  }
+
   if (name) state.userName = name;
+
   showToast('Account created! Check your email to confirm.', 'success', 5000);
 }
 
@@ -503,6 +537,7 @@ function render() {
   if (state.showAddSub) modalHtml += renderAddSubModal();
   if (state.showEditSub) modalHtml += renderEditSubModal();
   if (state.selectedBadgeId) modalHtml += renderBadgeModal();
+  if (state.showResetModal) modalHtml += renderResetModal();
 
   // Get or create modal container
   let modalContainer = phone.querySelector('#modal-container');
@@ -516,7 +551,8 @@ function render() {
   // Lock scroll when modal is open
   const hasModal = state.showWarning || state.showEditBudget || state.showEditGoal || 
                    state.showAddGoal || state.showEditBudgets || state.showEditBalance || 
-                   state.showProfileEditor || state.showAddSub || state.showEditSub || !!state.selectedBadgeId;
+                   state.showProfileEditor || state.showAddSub || state.showEditSub || 
+                   !!state.selectedBadgeId || state.showResetModal;
   
   c.style.overflow = hasModal ? 'hidden' : 'scroll';
 
@@ -2075,25 +2111,104 @@ function saveProfileEditor() {
 }
 
 function resetData() {
-  if (confirm('This will erase all transactions and goals. Continue?')) {
-    state = {
-      ...state,
-      txns: [], 
-      budgets: { 
-        'Shopping': 150, 
-        'Groceries': 300, 
-        'Eating Out': 100, 
-        'Health': 80,
-        'Transport': 200,
-        'Gifts': 400, 
-        'Misc': 150
-      },
-      goals: [], 
-      startingBalance: 0, 
-      period: 'thisMonth'
-    };
-    displayedBalance = null;
-    render();
+  state.showResetModal = true;
+  state.resetStep = 1;
+  render();
+}
+
+function resetNext() {
+  state.resetStep++;
+  render();
+}
+
+function resetCancel() {
+  state.showResetModal = false;
+  state.resetStep = 0;
+  render();
+}
+
+function resetConfirm() {
+  state.txns = [];
+  state.goals = [];
+  state.startingBalance = 0;
+  state.period = 'thisMonth';
+  state.budgets = { 'Shopping': 150, 'Groceries': 300, 'Eating Out': 100, 'Health': 80, 'Transport': 200, 'Gifts': 400, 'Misc': 150 };
+  state.subscriptions = [];
+  state.unlockedBadges = [];
+  state.badgeDates = {};
+  state._budgetEdited = false;
+  state._nameChanged = false;
+  state._balanceSet = false;
+  state._subAdded = false;
+  displayedBalance = null;
+  state.showResetModal = false;
+  state.resetStep = 0;
+  showToast('All data has been reset', 'info', 3000);
+  saveState();
+  render();
+}
+
+function renderResetModal() {
+  const step = state.resetStep;
+
+  const steps = [
+    null, // step 0 unused
+    {
+      icon: '⚠️',
+      title: 'Reset All Data?',
+      body: 'This will permanently delete all your transactions, goals, budgets, subscriptions, and achievements. This cannot be undone.',
+      cancel: 'Cancel',
+      confirm: 'I understand, continue',
+      confirmStyle: 'background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.3);color:#ef4444;',
+      onConfirm: 'resetNext()',
+    },
+    {
+      icon: '🗑️',
+      title: 'Are you sure?',
+      body: 'Everything will be wiped — your balance, transaction history, goals progress, and all badges you\'ve earned.',
+      cancel: 'No, keep my data',
+      confirm: 'Yes, delete everything',
+      confirmStyle: 'background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.4);color:#ef4444;font-weight:700;',
+      onConfirm: 'resetNext()',
+    },
+    {
+      icon: '💀',
+      title: 'Final warning',
+      body: 'Type DELETE below to confirm you want to erase all your data permanently.',
+      cancel: 'Cancel',
+      confirm: 'Erase Everything',
+      confirmStyle: 'background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);color:#ef4444;font-weight:700;',
+      onConfirm: 'checkResetConfirm()',
+      input: true,
+    },
+  ];
+
+  const s = steps[step];
+  if (!s) return '';
+
+  return `
+  <div class="modal-overlay">
+    <div class="plain-modal" style="text-align:center;">
+      <div style="font-size:40px;margin-bottom:10px;">${s.icon}</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:10px;">${s.title}</div>
+      <div style="font-size:13px;color:var(--cream-dim);line-height:1.6;margin-bottom:18px;">${s.body}</div>
+      ${s.input ? `<input type="text" id="reset-confirm-input" placeholder='Type DELETE to confirm' style="margin-bottom:16px;text-align:center;letter-spacing:2px;font-weight:700;">` : ''}
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button onclick="${s.onConfirm}" style="width:100%;padding:13px;border-radius:12px;font-size:13px;font-family:'Poppins',sans-serif;cursor:pointer;border:1px solid;${s.confirmStyle}">${s.confirm}</button>
+        <button onclick="resetCancel()" style="width:100%;padding:11px;border-radius:12px;font-size:13px;font-family:'Poppins',sans-serif;cursor:pointer;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--cream);">${s.cancel}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function checkResetConfirm() {
+  const input = document.getElementById('reset-confirm-input');
+  if (input?.value?.trim().toUpperCase() === 'DELETE') {
+    resetConfirm();
+  } else {
+    input?.classList.add('shake');
+    setTimeout(() => input?.classList.remove('shake'), 500);
+    showToast('Type DELETE (in caps) to confirm', 'error', 3000);
   }
 }
 
@@ -3117,35 +3232,28 @@ function showToast(message, type = 'info', duration = 3000) {
 
 // ================= APP INIT =================
 async function initApp() {
-  // Check if user is already logged in
-  const { data: { session } } = await db.auth.getSession();
-  
-  if (session?.user) {
-    currentUser = session.user;
-    await loadState();
-    if (!state.unlockedBadges) state.unlockedBadges = [];
-    render();
-    setTimeout(() => checkAchievements(), 2000);
-  } else {
-    // Check localStorage for existing data (returning user not yet migrated)
-    const local = localStorage.getItem('sprout_data');
-    if (local) {
-      try { Object.assign(state, JSON.parse(local)); } catch(e) {}
-    }
-    state.screen = 'auth';
-    render();
-  }
+  // Show auth screen immediately while we check session
+  state.screen = 'auth';
+  render();
 
-  // Listen for auth state changes (login, logout, magic link callback)
+  // onAuthStateChange fires immediately with INITIAL_SESSION if already logged in
+  // This is more reliable than getSession() for catching existing sessions
   db.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session?.user) {
+    console.log('Auth event:', event, session?.user?.id);
+
+    if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
       currentUser = session.user;
+      await new Promise(r => setTimeout(r, 300)); // wait for JWT to be set
       await loadState();
       if (!state.unlockedBadges) state.unlockedBadges = [];
       if (state.screen === 'auth') state.screen = 'splash';
       render();
       setTimeout(() => checkAchievements(), 2000);
-      showToast(`Welcome back! ☁️`, 'success', 2500);
+      if (event === 'SIGNED_IN') showToast('Welcome to Sprout ☁️', 'success', 2500);
+    } else if (event === 'INITIAL_SESSION' && !session) {
+      // No session — stay on auth screen
+      state.screen = 'auth';
+      render();
     } else if (event === 'SIGNED_OUT') {
       currentUser = null;
       state.screen = 'auth';
