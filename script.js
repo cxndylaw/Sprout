@@ -27,6 +27,14 @@ const ICON = {
   achievement: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>`,
   pencil: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>`,
   calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+  arrowUp: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`,
+  arrowDown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`,
+  zap: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  x: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`,
+  plant: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12"/><path d="M12 12C12 7 17 4 17 4s1 5-2 8"/><path d="M12 16C12 11 7 8 7 8s-1 5 2 8"/></svg>`,
+  plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
   mail: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <rect x="3" y="5" width="18" height="14" rx="2"/>
   <path d="M3 7l9 6 9-6"/>
@@ -1228,19 +1236,19 @@ function renderBank() {
   <div class="bank-search-wrap">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="color:var(--cream-dim);flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input type="text" placeholder="Search transactions..." value="${state.bankSearchQuery}" oninput="searchTransactions(this.value)" class="bank-search-input">
-    ${state.bankSearchQuery ? `<button onclick="searchTransactions('')" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;font-size:16px;padding:0;line-height:1;">✕</button>` : ''}
+    ${state.bankSearchQuery ? `<button onclick="searchTransactions('')" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;padding:0;display:flex;align-items:center;width:16px;height:16px;">${ICON.x}</button>` : ''}
   </div>
 
   <!-- Filter bar -->
   <div class="bank-filter-bar">
     <div class="category-filter">
       <button class="bank-chip ${state.bankFilterType!=='all'?'active':''}" onclick="toggleBankTypeFilter()">
-        ${state.bankFilterType==='all'?'All':state.bankFilterType==='income'?'↑ Income':'↓ Expense'} ${ICON.chevron}
+        ${state.bankFilterType==='all'?'All':state.bankFilterType==='income'?'Income':'Expense'} ${ICON.chevron}
       </button>
       <div class="filter-menu" id="bank-type-menu" style="display:none;">
         <button onclick="setBankFilterType('all')" class="${state.bankFilterType==='all'?'active':''}">All</button>
-        <button onclick="setBankFilterType('income')" class="${state.bankFilterType==='income'?'active':''}">↑ Income</button>
-        <button onclick="setBankFilterType('expense')" class="${state.bankFilterType==='expense'?'active':''}">↓ Expense</button>
+        <button onclick="setBankFilterType('income')" class="${state.bankFilterType==='income'?'active':''}">Income</button>
+        <button onclick="setBankFilterType('expense')" class="${state.bankFilterType==='expense'?'active':''}">Expense</button>
       </div>
     </div>
     <div class="category-filter">
@@ -1508,7 +1516,7 @@ function renderBudget() {
         <span>Saved: <strong style="color:var(--cream)">${cur()}${fmt(totalSaved)}</strong></span>
         <span>Target: <strong style="color:var(--cream)">${cur()}${fmt(totalGoalTarget)}</strong></span>
       </div>
-      <button onclick="openAutoSplitModal()" style="width:100%;margin-top:12px;background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);color:var(--income);padding:9px;border-radius:10px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;">⚡ Auto-split income into goals</button>
+      <button onclick="openAutoSplitModal()" style="width:100%;margin-top:12px;background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);color:var(--income);padding:9px;border-radius:10px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;"><span style="display:flex;width:14px;height:14px;">${ICON.zap}</span> Auto-split income into goals</button>
     </div>`;
     
     cardsHtml = summaryCard + `<div class="grid2">` + sortedGoals.map(g => {
@@ -1529,7 +1537,7 @@ function renderBudget() {
         <div class="b-remaining-val">${cur()}${fmt(remaining)}</div>
         <div class="progress-track"><div class="progress-fill" data-target="${Math.min(pct, 100)}%" style="background:var(--green-bar);"></div></div>
         <div class="progress-pct">${pct}%</div>
-        <button onclick="openFundGoalModal(${g.id});event.stopPropagation();" style="width:100%;margin-top:8px;background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);color:var(--income);padding:6px;border-radius:8px;font-size:10px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;">+ Add Funds</button>
+        <button onclick="openFundGoalModal(${g.id});event.stopPropagation();" style="width:100%;margin-top:8px;background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);color:var(--income);padding:6px;border-radius:8px;font-size:10px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px;"><span style="display:flex;width:12px;height:12px;">${ICON.plus}</span> Add Funds</button>
       </div>`;
     }).join('') + `</div>`;
   }
@@ -1596,6 +1604,17 @@ function saveEditBudget() {
   if (isPercentage && newAmount > 100) {
     showToast('Percentage cannot exceed 100%', 'error', 3000);
     return;
+  }
+  
+  // Check total across all budgets won't exceed 100%
+  if (isPercentage) {
+    const otherTotal = Object.entries(state.budgetsPercentage)
+      .filter(([k]) => k !== oldCat && k !== newName)
+      .reduce((s, [,v]) => s + (v || 0), 0);
+    if (otherTotal + newAmount > 100) {
+      showToast(`Total budget % would be ${otherTotal + newAmount}% — exceeds 100%`, 'error', 3500);
+      return;
+    }
   }
   
   const isNewBudget = !Object.keys(state.budgets).includes(oldCat);
@@ -1918,7 +1937,7 @@ function renderAutoSplitModal() {
   return `
   <div class="modal-overlay">
     <div class="plain-modal">
-      <h3>⚡ Auto-split into Goals</h3>
+      <h3 style="display:flex;align-items:center;gap:8px;"><span style="display:flex;width:18px;height:18px;">${ICON.zap}</span> Auto-split into Goals</h3>
       <div style="font-size:12px;color:var(--cream-dim);margin-bottom:12px;">Splits leftover income (after budgets) proportionally across unfinished goals.</div>
       <div class="field-label">Income amount</div>
       <div class="amount-wrap" style="margin-bottom:12px;">
@@ -2553,7 +2572,7 @@ function renderAddTxn() {
           <span style="font-size:13px;color:var(--cream-dim);">%</span>
         </div>
         ${incomeAmt > 0 ? `<div style="font-size:11px;color:var(--cream-dim);width:54px;text-align:right;flex-shrink:0;">${cur()}${fmt(allocated)}</div>` : ''}
-        <button onclick="removeSplit(${i})" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;padding:4px;font-size:14px;flex-shrink:0;">✕</button>
+        <button onclick="removeSplit(${i})" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;padding:4px;display:flex;align-items:center;width:20px;height:20px;flex-shrink:0;">${ICON.x}</button>
       </div>`;
     }).join('');
   }
@@ -2632,13 +2651,13 @@ function renderAddTxn() {
       return `
       <div class="txn-section-label" style="margin-top:4px;">Save to Goals</div>
       <div style="display:flex;gap:8px;margin-bottom:12px;">
-        <button onclick="state.form.splitMode='manual';state.form.allocate=true;if(!state.form.splitGoals||!state.form.splitGoals.length)state.form.splitGoals=[{goalId:null,pct:''}];render();" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid ${f.splitMode!=='auto'&&f.allocate?'rgba(127,185,138,0.6)':'rgba(255,255,255,0.1)'};background:${f.splitMode!=='auto'&&f.allocate?'rgba(127,185,138,0.15)':'rgba(255,255,255,0.04)'};color:var(--cream);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;">
-          ✏️ Manual %
+        <button onclick="state.form.splitMode='manual';state.form.allocate=true;if(!state.form.splitGoals||!state.form.splitGoals.length)state.form.splitGoals=[{goalId:null,pct:''}];render();" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid ${f.splitMode!=='auto'&&f.allocate?'rgba(127,185,138,0.6)':'rgba(255,255,255,0.1)'};background:${f.splitMode!=='auto'&&f.allocate?'rgba(127,185,138,0.15)':'rgba(255,255,255,0.04)'};color:var(--cream);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <span style="display:flex;width:14px;height:14px;">${ICON.pencil}</span> Manual %
         </button>
-        <button onclick="state.form.splitMode='auto';state.form.allocate=true;render();" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid ${f.splitMode==='auto'?'rgba(127,185,138,0.6)':'rgba(255,255,255,0.1)'};background:${f.splitMode==='auto'?'rgba(127,185,138,0.15)':'rgba(255,255,255,0.04)'};color:var(--cream);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;">
-          ⚡ Auto-split
+        <button onclick="state.form.splitMode='auto';state.form.allocate=true;render();" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid ${f.splitMode==='auto'?'rgba(127,185,138,0.6)':'rgba(255,255,255,0.1)'};background:${f.splitMode==='auto'?'rgba(127,185,138,0.15)':'rgba(255,255,255,0.04)'};color:var(--cream);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <span style="display:flex;width:14px;height:14px;">${ICON.zap}</span> Auto-split
         </button>
-        ${f.allocate ? `<button onclick="state.form.allocate=false;state.form.splitMode=null;state.form.splitGoals=[];render();" style="padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--cream-dim);font-family:'Poppins',sans-serif;cursor:pointer;font-size:18px;line-height:1;">✕</button>` : ''}
+        ${f.allocate ? `<button onclick="state.form.allocate=false;state.form.splitMode=null;state.form.splitGoals=[];render();" style="padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--cream-dim);font-family:'Poppins',sans-serif;cursor:pointer;display:flex;align-items:center;width:36px;height:36px;justify-content:center;">${ICON.x}</button>` : ''}
       </div>
 
       ${f.allocate && f.splitMode !== 'auto' ? `
@@ -3012,7 +3031,7 @@ function renderSetup() {
               <span style="font-size:12px;">${sym}</span>
               <input type="number" value="${g.goal || ''}" placeholder="0" oninput="state.setupGoals[${i}].goal=parseFloat(this.value)||0" style="font-size:12px;">
             </div>
-            <button onclick="state.setupGoals.splice(${i},1);render();" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0;">✕</button>
+            <button onclick="state.setupGoals.splice(${i},1);render();" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;display:flex;align-items:center;width:20px;height:20px;flex-shrink:0;">${ICON.x}</button>
           </div>`).join('')}
       </div>
       <button onclick="if(!state.setupGoals)state.setupGoals=[];state.setupGoals.push({name:'',goal:0,saved:0});render();" style="width:100%;margin-top:12px;background:rgba(127,185,138,0.1);border:1px dashed rgba(127,185,138,0.4);color:var(--cream-dim);padding:10px;border-radius:10px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;">+ Add a goal</button>
@@ -3488,19 +3507,27 @@ function renderSubscriptions() {
   <!-- Subscription list -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
     <span style="font-weight:600;">All Subscriptions</span>
-    <button class="filter-btn" style="min-width:auto;padding:6px 12px;background:rgba(127,185,138,0.3);border-color:rgba(127,185,138,0.4);" onclick="openAddSub()">+ Add</button>
+    <div style="display:flex;gap:8px;">
+      <button class="filter-btn" style="min-width:auto;padding:6px 10px;background:rgba(127,185,138,0.15);border-color:rgba(127,185,138,0.3);font-size:10px;" onclick="renewAllSubscriptions()">Renew All</button>
+      <button class="filter-btn" style="min-width:auto;padding:6px 12px;background:rgba(127,185,138,0.3);border-color:rgba(127,185,138,0.4);" onclick="openAddSub()">+ Add</button>
+    </div>
   </div>
   <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
     ${subs.length === 0 ? `<div class="dim" style="text-align:center;padding:24px;">No subscriptions yet — tap Add to get started</div>` : ''}
     ${subs.map(s => {
       const monthly = subMonthlyAmount(s);
-      const yearly = subYearlyAmount(s);
+      const today = new Date().toISOString().slice(0, 10);
+      const isDue = s.nextRenewal && s.nextRenewal <= today;
+      const daysUntil = s.nextRenewal ? Math.ceil((new Date(s.nextRenewal) - new Date()) / (1000*60*60*24)) : null;
       return `
-      <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer;" onclick="openEditSub(${s.id})">
-        <div style="width:40px;height:40px;border-radius:10px;background:${s.color || '#4a6b58'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">${s.emoji || '📦'}</div>
+      <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer;${isDue?'border-color:rgba(245,169,98,0.4);':''}" onclick="openEditSub(${s.id})">
+        <div style="width:40px;height:40px;border-radius:10px;background:${s.color || '#4a6b58'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:white;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>
+        </div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;font-size:13px;">${escapeHtml(s.name)}</div>
-          <div style="font-size:11px;color:var(--cream-dim);">${s.cat} · ${s.cycle}</div>
+          <div style="font-size:11px;color:var(--cream-dim);">${s.cat} · ${s.cycle}${s.autoRenew ? ' · auto' : ''}</div>
+          ${s.nextRenewal ? `<div style="font-size:10px;color:${isDue?'rgba(245,169,98,0.9)':'var(--cream-dim)'};">${isDue ? 'Renewal due!' : daysUntil === 0 ? 'Due today' : `Renews in ${daysUntil}d`}</div>` : ''}
         </div>
         <div style="text-align:right;flex-shrink:0;">
           <div style="font-weight:700;font-size:14px;">${cur()}${fmt(s.amount)}</div>
@@ -3541,17 +3568,14 @@ function saveAddSub() {
   const cycle = document.getElementById('sub-cycle').value;
   const cat = document.getElementById('sub-cat').value;
   const color = document.getElementById('sub-color').value;
-  const emoji = document.getElementById('sub-emoji').value.trim() || '📦';
+  const nextRenewal = document.getElementById('sub-renewal')?.value || null;
+  const autoRenew = document.getElementById('sub-autorenew')?.checked || false;
   
-  if (!name || !amount || amount <= 0) {
-    showToast('Please enter a valid name and amount', 'error', 2500);
-    return;
-  }
-  
+  if (!name || !amount || amount <= 0) { showToast('Please enter a valid name and amount', 'error', 2500); return; }
   if (!state.subscriptions) state.subscriptions = [];
-  state.subscriptions.push({ id: state.nextSubId++, name, amount, cycle, cat, color, emoji });
-  state._subAdded = true;
+  state.subscriptions.push({ id: state.nextSubId++, name, amount, cycle, cat, color, nextRenewal, autoRenew });
   showToast(`${name} added!`, 'success', 2500);
+  state._subAdded = true;
   state.showAddSub = false;
   render();
 }
@@ -3562,21 +3586,38 @@ function saveEditSub() {
   const cycle = document.getElementById('sub-cycle').value;
   const cat = document.getElementById('sub-cat').value;
   const color = document.getElementById('sub-color').value;
-  const emoji = document.getElementById('sub-emoji').value.trim() || '📦';
+  const nextRenewal = document.getElementById('sub-renewal')?.value || null;
+  const autoRenew = document.getElementById('sub-autorenew')?.checked || false;
   
-  if (!name || !amount || amount <= 0) {
-    showToast('Please enter a valid name and amount', 'error', 2500);
-    return;
-  }
-  
+  if (!name || !amount || amount <= 0) { showToast('Please enter a valid name and amount', 'error', 2500); return; }
   const sub = state.subscriptions.find(s => s.id === state.editSubData.id);
-  if (sub) {
-    Object.assign(sub, { name, amount, cycle, cat, color, emoji });
-    showToast('Subscription updated!', 'success', 2500);
-  }
+  if (sub) Object.assign(sub, { name, amount, cycle, cat, color, nextRenewal, autoRenew });
+  showToast('Subscription updated!', 'success', 2500);
   state.showEditSub = false;
   state.editSubData = null;
   render();
+}
+
+function renewAllSubscriptions() {
+  const subs = (state.subscriptions || []).filter(s => s.autoRenew && s.nextRenewal);
+  const today = new Date().toISOString().slice(0, 10);
+  let count = 0;
+  subs.forEach(s => {
+    if (s.nextRenewal <= today) {
+      // Advance renewal date by cycle
+      const d = new Date(s.nextRenewal);
+      if (s.cycle === 'monthly') d.setMonth(d.getMonth() + 1);
+      else if (s.cycle === 'yearly') d.setFullYear(d.getFullYear() + 1);
+      else if (s.cycle === 'weekly') d.setDate(d.getDate() + 7);
+      else if (s.cycle === 'quarterly') d.setMonth(d.getMonth() + 3);
+      s.nextRenewal = d.toISOString().slice(0, 10);
+      // Add expense transaction
+      state.txns.push({ id: state.nextId++, desc: s.name, amount: s.amount, type: 'expense', cat: 'Subscription', date: today });
+      count++;
+    }
+  });
+  if (count > 0) { showToast(`${count} subscription${count>1?'s':''} renewed`, 'success', 2500); saveState(); render(); }
+  else showToast('No subscriptions due for renewal', 'info', 2500);
 }
 
 function deleteSubConfirm(id) {
@@ -3592,6 +3633,7 @@ function deleteSubConfirm(id) {
 }
 
 function renderAddSubModal() {
+  const selectStyle = `width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;`;
   return `
   <div class="modal-overlay">
     <div class="plain-modal">
@@ -3606,21 +3648,25 @@ function renderAddSubModal() {
           <div class="amount-wrap"><span>${cur()}</span><input type="number" id="sub-amount" placeholder="0.00"></div>
         </div>
         <div class="field">
-          <div class="field-label">Emoji</div>
-          <input type="text" id="sub-emoji" placeholder="📦" maxlength="2" style="text-align:center;font-size:20px;">
+          <div class="field-label">Billing cycle</div>
+          <select id="sub-cycle" style="${selectStyle}">
+            ${SUB_CYCLES.map(c => `<option value="${c}">${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('')}
+          </select>
         </div>
       </div>
       <div class="field">
-        <div class="field-label">Billing cycle</div>
-        <select id="sub-cycle" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
-          ${SUB_CYCLES.map(c => `<option value="${c}">${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('')}
+        <div class="field-label">Category</div>
+        <select id="sub-cat" style="${selectStyle}">
+          ${SUB_CATS.map(c => `<option value="${c}">${c}</option>`).join('')}
         </select>
       </div>
       <div class="field">
-        <div class="field-label">Category</div>
-        <select id="sub-cat" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
-          ${SUB_CATS.map(c => `<option value="${c}">${c}</option>`).join('')}
-        </select>
+        <div class="field-label">Next renewal date <span style="opacity:0.5;font-size:10px;">optional</span></div>
+        <input type="date" id="sub-renewal" style="color-scheme:dark;">
+      </div>
+      <div class="s-row" style="margin-bottom:12px;">
+        <span style="font-size:13px;">Auto-renew <span style="font-size:11px;color:var(--cream-dim);">(logs expense automatically)</span></span>
+        <label style="display:flex;align-items:center;"><input type="checkbox" id="sub-autorenew" style="width:16px;height:16px;cursor:pointer;accent-color:var(--income);"></label>
       </div>
       <div class="field">
         <div class="field-label">Colour</div>
@@ -3654,21 +3700,25 @@ function renderEditSubModal() {
           <div class="amount-wrap"><span>${cur()}</span><input type="number" id="sub-amount" value="${d.amount}" placeholder="0.00"></div>
         </div>
         <div class="field">
-          <div class="field-label">Emoji</div>
-          <input type="text" id="sub-emoji" value="${d.emoji || '📦'}" placeholder="📦" maxlength="2" style="text-align:center;font-size:20px;">
+          <div class="field-label">Billing cycle</div>
+          <select id="sub-cycle" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
+            ${SUB_CYCLES.map(c => `<option value="${c}" ${d.cycle===c?'selected':''}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('')}
+          </select>
         </div>
-      </div>
-      <div class="field">
-        <div class="field-label">Billing cycle</div>
-        <select id="sub-cycle" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
-          ${SUB_CYCLES.map(c => `<option value="${c}" ${d.cycle===c?'selected':''}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('')}
-        </select>
       </div>
       <div class="field">
         <div class="field-label">Category</div>
         <select id="sub-cat" style="width:100%;background:rgba(63,92,76,0.3);border:1px solid rgba(255,255,255,0.15);color:var(--cream);padding:10px 14px;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;">
           ${SUB_CATS.map(c => `<option value="${c}" ${d.cat===c?'selected':''}>${c}</option>`).join('')}
         </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Next renewal date</div>
+        <input type="date" id="sub-renewal" value="${d.nextRenewal || ''}" style="color-scheme:dark;">
+      </div>
+      <div class="s-row" style="margin-bottom:12px;">
+        <span style="font-size:13px;">Auto-renew <span style="font-size:11px;color:var(--cream-dim);">(logs expense automatically)</span></span>
+        <label style="display:flex;align-items:center;"><input type="checkbox" id="sub-autorenew" ${d.autoRenew?'checked':''} style="width:16px;height:16px;cursor:pointer;accent-color:var(--income);"></label>
       </div>
       <div class="field">
         <div class="field-label">Colour</div>
@@ -3848,7 +3898,6 @@ async function initApp() {
   // Render auth screen first so DOM is ready
   state.screen = 'auth';
   render();
-  // Then immediately cover it with the loader (DOM now exists)
   showResumeLoader();
 
   db.auth.onAuthStateChange(async (event, session) => {
@@ -3857,6 +3906,9 @@ async function initApp() {
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') authInitialized = true;
 
       currentUser = session.user;
+      // Store last active time
+      localStorage.setItem('sprout_last_active', Date.now().toString());
+
       await new Promise(r => setTimeout(r, 300));
       Object.assign(state, DEFAULT_STATE);
       await loadState();
@@ -3871,17 +3923,25 @@ async function initApp() {
         state.screen = 'setup';
         state.setupStep = 1;
       } else {
-        // Skip splash — go straight to home
         state.screen = 'home';
       }
 
       hideResumeLoader();
       render();
       setTimeout(() => checkAchievements(), 2000);
-      if (event === 'SIGNED_IN' && state.setupComplete) showToast('Welcome back! ☁️', 'success', 2500);
+      startSupabasePing();
+      if (event === 'SIGNED_IN' && state.setupComplete) showToast('Welcome back!', 'success', 2000);
 
     } else if (event === 'INITIAL_SESSION' && !session) {
       authInitialized = true;
+      // Check if user was recently active — if so, try token refresh before showing auth
+      const lastActive = parseInt(localStorage.getItem('sprout_last_active') || '0');
+      const hoursSince = (Date.now() - lastActive) / (1000 * 60 * 60);
+      if (lastActive && hoursSince < 720) { // 30 days
+        // Try to restore session silently
+        const { data } = await db.auth.getSession();
+        if (data?.session) return; // onAuthStateChange will fire again with session
+      }
       hideResumeLoader();
       state.screen = 'auth';
       render();
@@ -3889,12 +3949,22 @@ async function initApp() {
       authInitialized = false;
       currentUser = null;
       localStorage.removeItem('sprout_data');
+      localStorage.removeItem('sprout_last_active');
       Object.assign(state, DEFAULT_STATE);
       hideResumeLoader();
       state.screen = 'auth';
       render();
     }
   });
+}
+
+// Ping Supabase every 4 days to prevent project pausing (free tier pauses after 7 inactive days)
+let pingInterval = null;
+function startSupabasePing() {
+  if (pingInterval) return;
+  pingInterval = setInterval(async () => {
+    try { await db.from('user_data').select('id').limit(1); } catch(e) {}
+  }, 4 * 24 * 60 * 60 * 1000); // every 4 days
 }
 
 // Lock to portrait on supported browsers
