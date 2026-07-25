@@ -38,6 +38,8 @@ html {
   overscroll-behavior: none;
   height: 100%;
   height: -webkit-fill-available;
+  /* Fill safe areas with app background colour so no dark bar shows */
+  background: #182922;
 }
 
 body {
@@ -53,7 +55,6 @@ body {
   color: var(--cream);
   overflow: hidden;
   overscroll-behavior: none;
-  /* Prevent body from stretching wider than viewport on desktop */
   box-sizing: border-box;
 }
 
