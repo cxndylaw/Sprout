@@ -82,32 +82,13 @@ body {
 }
 
 @media (max-width: 500px) {
-  /* Keep the phone frame look in the webapp (standalone/PWA mode) */
-  body {
-    padding: 8px;
-    align-items: stretch;
-  }
-  
-  #phone {
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .3), 0 0 0 2px #0f1a15;
-  }
-  
-  #screen-content {
-    padding: 18px 14px 8px;
-  }
-}
-
-/* In browser mode (NOT installed as PWA) — fill the full screen */
-@media (max-width: 500px) and (display-mode: browser) {
+  /* PWA / standalone — edge to edge, no chrome */
   body {
     padding: 0;
     align-items: stretch;
     justify-content: flex-start;
-    min-height: 100dvh;
-    min-height: -webkit-fill-available;
   }
-  
+
   #phone {
     border-radius: 0;
     box-shadow: none;
@@ -119,10 +100,21 @@ body {
   }
 
   #screen-content {
+    padding: 18px 14px 8px;
+    /* In standalone/PWA, account for dynamic island / status bar */
     padding-top: calc(18px + env(safe-area-inset-top));
-    padding-left: 14px;
-    padding-right: 14px;
-    padding-bottom: 8px;
+  }
+
+  #bottom-nav {
+    /* Nav sits right above home indicator */
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+}
+
+/* In regular browser mode — same full-screen layout but extra safe areas for toolbar */
+@media (max-width: 500px) and (display-mode: browser) {
+  #screen-content {
+    padding-top: calc(18px + env(safe-area-inset-top));
   }
 
   #bottom-nav {
@@ -132,16 +124,17 @@ body {
 
 @media (max-width: 420px) {
   body {
-    padding: 4px;
+    padding: 0;
   }
-  
+
   #phone {
-    border-radius: 16px;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, .3), 0 0 0 1px #0f1a15;
+    border-radius: 0;
+    box-shadow: none;
   }
-  
+
   #screen-content {
     padding: 16px 12px 6px;
+    padding-top: calc(16px + env(safe-area-inset-top));
   }
   
   .header-card,
