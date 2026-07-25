@@ -2478,7 +2478,7 @@ function checkResetConfirm() {
 
 /* ---------- Add Transaction ---------- */
 function openAddTxn(type) {
-  state.form = { type: type || 'expense', desc: '', amount: '', date: daysAgo(0), cat: '', moreOpen: false, allocate: false, allocateGoalId: null, splitGoals: [] };
+  state.form = { type: type || 'expense', desc: '', amount: '', date: daysAgo(0), cat: '', moreOpen: false, allocate: false, allocateGoalId: null, splitGoals: [], splitMode: null };
   state.screen = 'addTxn';
   setPhoneTheme(state.form.type);
   render();
@@ -2615,21 +2615,61 @@ function renderAddTxn() {
     ${budgetInfo}
 
     <!-- Goal split (income only) -->
-    ${!isExpense ? `
-    <div class="allocate-row">
-      <span>Split into goals?</span>
-      <button class="switch ${f.allocate ? 'on' : ''}" onclick="toggleAllocate()"><span class="knob"></span></button>
-    </div>
-    <div class="allocate-panel ${f.allocate ? 'open' : ''}" id="allocate-panel">
-      ${splitRows}
-      ${splits.length < state.goals.length ? `<button onclick="addSplit()" style="width:100%;background:rgba(127,185,138,0.15);border:1px dashed rgba(127,185,138,0.4);color:var(--cream-dim);padding:8px;border-radius:10px;font-size:12px;cursor:pointer;margin-bottom:8px;">+ Add goal</button>` : ''}
-      ${splits.length > 0 ? `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,0.08);">
-        <span style="font-size:12px;color:var(--cream-dim);">Total allocated</span>
-        <span style="font-size:13px;font-weight:700;color:${pctColor};" id="split-total">${totalPct}%${incomeAmt > 0 ? ` · ${cur()}${fmt(incomeAmt * totalPct / 100)}` : ''}</span>
+    ${!isExpense ? (() => {
+      const totalBudgetPct = Object.values(state.budgetsPercentage).reduce((a,b)=>a+b,0);
+      const budgetDeduct = state.budgetMode === 'percentage'
+        ? (incomeAmt * totalBudgetPct / 100)
+        : Object.values(state.budgets).reduce((a,b)=>a+b,0);
+      const leftover = Math.max(0, incomeAmt - budgetDeduct);
+      const activeGoals = state.goals.filter(g => g.saved < g.goal);
+      const totalNeed = activeGoals.reduce((s,g)=>s+Math.max(0,g.goal-g.saved),0);
+      const autoPreview = activeGoals.map(g => {
+        const need = Math.max(0,g.goal-g.saved);
+        const share = totalNeed>0 ? need/totalNeed : 1/activeGoals.length;
+        return { g, amt: Math.min(need, leftover*share) };
+      });
+
+      return `
+      <div class="txn-section-label" style="margin-top:4px;">Save to Goals</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button onclick="state.form.splitMode='manual';state.form.allocate=true;if(!state.form.splitGoals||!state.form.splitGoals.length)state.form.splitGoals=[{goalId:null,pct:''}];render();" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid ${f.splitMode!=='auto'&&f.allocate?'rgba(127,185,138,0.6)':'rgba(255,255,255,0.1)'};background:${f.splitMode!=='auto'&&f.allocate?'rgba(127,185,138,0.15)':'rgba(255,255,255,0.04)'};color:var(--cream);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;">
+          ✏️ Manual %
+        </button>
+        <button onclick="state.form.splitMode='auto';state.form.allocate=true;render();" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid ${f.splitMode==='auto'?'rgba(127,185,138,0.6)':'rgba(255,255,255,0.1)'};background:${f.splitMode==='auto'?'rgba(127,185,138,0.15)':'rgba(255,255,255,0.04)'};color:var(--cream);font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;">
+          ⚡ Auto-split
+        </button>
+        ${f.allocate ? `<button onclick="state.form.allocate=false;state.form.splitMode=null;state.form.splitGoals=[];render();" style="padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--cream-dim);font-family:'Poppins',sans-serif;cursor:pointer;font-size:18px;line-height:1;">✕</button>` : ''}
       </div>
-      ${totalPct > 100 ? `<div style="font-size:11px;color:var(--red-bar);text-align:center;">Total exceeds 100%</div>` : ''}` : ''}
-    </div>` : ''}
+
+      ${f.allocate && f.splitMode !== 'auto' ? `
+      <div class="allocate-panel open">
+        ${splitRows}
+        ${splits.length < activeGoals.length ? `<button onclick="addSplit()" style="width:100%;background:rgba(127,185,138,0.15);border:1px dashed rgba(127,185,138,0.4);color:var(--cream-dim);padding:8px;border-radius:10px;font-size:12px;cursor:pointer;margin-bottom:8px;">+ Add goal</button>` : ''}
+        ${splits.length > 0 ? `
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(255,255,255,0.08);">
+          <span style="font-size:12px;color:var(--cream-dim);">Total allocated</span>
+          <span style="font-size:13px;font-weight:700;color:${pctColor};">${totalPct}%${incomeAmt>0?` · ${cur()}${fmt(incomeAmt*totalPct/100)}`:''}</span>
+        </div>
+        ${totalPct>100?`<div style="font-size:11px;color:var(--red-bar);text-align:center;">Total exceeds 100%</div>`:''}` : ''}
+      </div>` : ''}
+
+      ${f.allocate && f.splitMode === 'auto' ? `
+      <div class="allocate-panel open">
+        <div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--cream-dim);">Income</span><span>${incomeAmt>0?cur()+fmt(incomeAmt):'Enter amount above'}</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--cream-dim);">Budgets (${state.budgetMode==='percentage'?totalBudgetPct+'%':'fixed'})</span><span>-${cur()}${fmt(budgetDeduct)}</span></div>
+          <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;font-weight:700;"><span>For goals</span><span style="color:var(--income);">${cur()}${fmt(leftover)}</span></div>
+        </div>
+        ${activeGoals.length===0?`<div style="color:var(--cream-dim);font-size:12px;text-align:center;padding:8px;">All goals complete! 🎉</div>`:`
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${autoPreview.map(({g,amt})=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(127,185,138,0.1);border-radius:8px;padding:8px 10px;">
+            <span style="font-size:12px;">${escapeHtml(g.name)}</span>
+            <span style="font-size:13px;font-weight:700;color:var(--income);">${incomeAmt>0?`+${cur()}${fmt(amt)}`:'–'}</span>
+          </div>`).join('')}
+        </div>`}
+      </div>` : ''}`;
+    })() : ''}
 
     <!-- Save button -->
     <button class="save-btn" id="save-btn" onclick="saveTxn()">Save Transaction</button>
@@ -2706,27 +2746,34 @@ function saveTxn() {
 
   const txn = { id: state.nextId++, desc: f.desc.trim(), amount: amt, type: f.type, cat: f.cat, date: f.date };
   
-  if (f.type === 'income' && f.allocate && f.splitGoals && f.splitGoals.length > 0) {
-    const validSplits = f.splitGoals.filter(s => s.goalId && parseFloat(s.pct) > 0);
-    const totalPct = validSplits.reduce((sum, s) => sum + parseFloat(s.pct), 0);
-    
-    if (totalPct > 100) {
-      showToast('Goal splits exceed 100% — please adjust', 'error', 3000);
-      return;
-    }
-    
-    txn.splitGoals = validSplits;
-    validSplits.forEach(s => {
-      const g = state.goals.find(g => g.id === s.goalId);
-      if (g) {
-        const allocated = (amt * parseFloat(s.pct)) / 100;
-        g.saved += allocated;
-      }
-    });
-    
-    if (validSplits.length > 0) {
-      const totalAllocated = (amt * totalPct) / 100;
-      setTimeout(() => showToast(`${cur()}${fmt(totalAllocated)} split across ${validSplits.length} goal${validSplits.length > 1 ? 's' : ''}`, 'info', 3000), 300);
+  if (f.type === 'income' && f.allocate) {
+    if (f.splitMode === 'auto') {
+      // Auto-split: income - budgets = leftover, split by goal need
+      const totalBudgetPct = Object.values(state.budgetsPercentage).reduce((a,b)=>a+b,0);
+      const budgetDeduct = state.budgetMode === 'percentage' ? (amt * totalBudgetPct / 100) : Object.values(state.budgets).reduce((a,b)=>a+b,0);
+      const leftover = Math.max(0, amt - budgetDeduct);
+      const activeGoals = state.goals.filter(g => g.saved < g.goal);
+      const totalNeed = activeGoals.reduce((s,g)=>s+Math.max(0,g.goal-g.saved),0);
+      let totalAllocated = 0;
+      const autoSplits = [];
+      activeGoals.forEach(g => {
+        const need = Math.max(0, g.goal - g.saved);
+        const share = totalNeed > 0 ? need/totalNeed : 1/activeGoals.length;
+        const alloc = Math.min(need, leftover * share);
+        if (alloc > 0) { g.saved += alloc; totalAllocated += alloc; autoSplits.push(g.name); }
+      });
+      if (autoSplits.length > 0) setTimeout(() => showToast(`${cur()}${fmt(totalAllocated)} auto-split across ${autoSplits.length} goal${autoSplits.length>1?'s':''}`, 'info', 3000), 300);
+
+    } else if (f.splitGoals && f.splitGoals.length > 0) {
+      const validSplits = f.splitGoals.filter(s => s.goalId && parseFloat(s.pct) > 0);
+      const totalPct = validSplits.reduce((sum, s) => sum + parseFloat(s.pct), 0);
+      if (totalPct > 100) { showToast('Goal splits exceed 100% — please adjust', 'error', 3000); return; }
+      txn.splitGoals = validSplits;
+      validSplits.forEach(s => {
+        const g = state.goals.find(g => g.id === s.goalId);
+        if (g) g.saved += (amt * parseFloat(s.pct)) / 100;
+      });
+      if (validSplits.length > 0) setTimeout(() => showToast(`${cur()}${fmt(amt * totalPct / 100)} split across ${validSplits.length} goal${validSplits.length>1?'s':''}`, 'info', 3000), 300);
     }
   }
   
