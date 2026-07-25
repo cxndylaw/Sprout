@@ -130,6 +130,8 @@ const DEFAULT_STATE = {
   showAddSub: false, showEditSub: false, editSubData: null,
   showEditAccount: false,
   showDeleteAccountModal: false, deleteAccountStep: 1,
+  showFundGoal: false, fundGoalId: null,
+  showAutoSplit: false, autoSplitIncome: '',
 };
 
 let state = { ...DEFAULT_STATE };
@@ -488,6 +490,8 @@ function render() {
   if (state.showResetModal) modalHtml += renderResetModal();
   if (state.showEditAccount) modalHtml += renderEditAccountModal();
   if (state.showDeleteAccountModal) modalHtml += renderDeleteAccountModal();
+  if (state.showFundGoal) modalHtml += renderFundGoalModal();
+  if (state.showAutoSplit) modalHtml += renderAutoSplitModal();
 
   // Get or create modal container
   let modalContainer = phone.querySelector('#modal-container');
@@ -1504,6 +1508,7 @@ function renderBudget() {
         <span>Saved: <strong style="color:var(--cream)">${cur()}${fmt(totalSaved)}</strong></span>
         <span>Target: <strong style="color:var(--cream)">${cur()}${fmt(totalGoalTarget)}</strong></span>
       </div>
+      <button onclick="openAutoSplitModal()" style="width:100%;margin-top:12px;background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);color:var(--income);padding:9px;border-radius:10px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;">⚡ Auto-split income into goals</button>
     </div>`;
     
     cardsHtml = summaryCard + `<div class="grid2">` + sortedGoals.map(g => {
@@ -1524,6 +1529,7 @@ function renderBudget() {
         <div class="b-remaining-val">${cur()}${fmt(remaining)}</div>
         <div class="progress-track"><div class="progress-fill" data-target="${Math.min(pct, 100)}%" style="background:var(--green-bar);"></div></div>
         <div class="progress-pct">${pct}%</div>
+        <button onclick="openFundGoalModal(${g.id});event.stopPropagation();" style="width:100%;margin-top:8px;background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);color:var(--income);padding:6px;border-radius:8px;font-size:10px;font-family:'Poppins',sans-serif;cursor:pointer;font-weight:600;">+ Add Funds</button>
       </div>`;
     }).join('') + `</div>`;
   }
@@ -1833,6 +1839,133 @@ function sortGoals(by) {
 
 function openAddGoal() { state.showAddGoal = true; render(); }
 function closeAddGoal() { state.showAddGoal = false; render(); }
+
+// ---- Manual Fund Goal ----
+function openFundGoalModal(id) {
+  state.fundGoalId = id;
+  state.fundGoalAmount = '';
+  state.showFundGoal = true;
+  render();
+}
+function closeFundGoal() { state.showFundGoal = false; state.fundGoalId = null; render(); }
+function saveFundGoal() {
+  const amt = parseFloat(document.getElementById('fund-goal-amt')?.value);
+  if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error', 2500); return; }
+  const g = state.goals.find(g => g.id === state.fundGoalId);
+  if (g) {
+    g.saved += amt;
+    const pct = g.goal > 0 ? Math.round((g.saved / g.goal) * 100) : 0;
+    if (g.saved >= g.goal) setTimeout(() => showToast(`🎉 Goal complete! "${g.name}" is fully funded!`, 'success', 4000), 300);
+    else showToast(`Added ${cur()}${fmt(amt)} to ${g.name} (${pct}%)`, 'success', 2500);
+    saveState();
+    setTimeout(() => checkAchievements(), 400);
+  }
+  closeFundGoal();
+  render();
+}
+function renderFundGoalModal() {
+  if (!state.showFundGoal) return '';
+  const g = state.goals.find(g => g.id === state.fundGoalId);
+  if (!g) return '';
+  const remaining = Math.max(0, g.goal - g.saved);
+  return `
+  <div class="modal-overlay">
+    <div class="plain-modal">
+      <h3>Add to "${escapeHtml(g.name)}"</h3>
+      <div style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;">Remaining: ${cur()}${fmt(remaining)}</div>
+      <div class="amount-wrap" style="margin-bottom:16px;">
+        <span>${cur()}</span>
+        <input type="number" id="fund-goal-amt" placeholder="0.00" style="width:100%;">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        ${[10,20,50,100,200].map(a => `<button onclick="document.getElementById('fund-goal-amt').value=${a};" style="flex:1;min-width:40px;background:rgba(127,185,138,0.15);border:1px solid rgba(127,185,138,0.3);color:var(--cream);padding:7px;border-radius:8px;font-size:12px;font-family:'Poppins',sans-serif;cursor:pointer;">${cur()}${a}</button>`).join('')}
+      </div>
+      <div class="modal-btn-row">
+        <button class="cancel" onclick="closeFundGoal()">Cancel</button>
+        <button class="confirm" onclick="saveFundGoal()">Add Funds</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---- Auto-split income into goals ----
+function openAutoSplitModal() {
+  state.showAutoSplit = true;
+  state.autoSplitIncome = '';
+  render();
+}
+function closeAutoSplit() { state.showAutoSplit = false; render(); }
+function renderAutoSplitModal() {
+  if (!state.showAutoSplit) return '';
+  const monthIncome = getPeriodTotals('thisMonth').income;
+  const totalBudgetPct = Object.values(state.budgetsPercentage).reduce((a, b) => a + b, 0);
+  const incomeInput = parseFloat(state.autoSplitIncome) || monthIncome;
+  
+  // Calculate leftover after budgets
+  const budgetAmt = state.budgetMode === 'percentage' ? (incomeInput * totalBudgetPct / 100) : Object.values(state.budgets).reduce((a,b)=>a+b,0);
+  const leftover = Math.max(0, incomeInput - budgetAmt);
+  
+  // Split leftover equally among goals (or by remaining needed)
+  const activeGoals = state.goals.filter(g => g.saved < g.goal);
+  const totalRemaining = activeGoals.reduce((s, g) => s + Math.max(0, g.goal - g.saved), 0);
+  
+  const splits = activeGoals.map(g => {
+    const need = Math.max(0, g.goal - g.saved);
+    const share = totalRemaining > 0 ? (need / totalRemaining) : (1 / activeGoals.length);
+    return { goal: g, amt: Math.min(need, leftover * share) };
+  });
+
+  return `
+  <div class="modal-overlay">
+    <div class="plain-modal">
+      <h3>⚡ Auto-split into Goals</h3>
+      <div style="font-size:12px;color:var(--cream-dim);margin-bottom:12px;">Splits leftover income (after budgets) proportionally across unfinished goals.</div>
+      <div class="field-label">Income amount</div>
+      <div class="amount-wrap" style="margin-bottom:12px;">
+        <span>${cur()}</span>
+        <input type="number" id="auto-split-income" placeholder="${fmt(monthIncome)}" value="${state.autoSplitIncome}" oninput="state.autoSplitIncome=this.value;render();" style="width:100%;">
+      </div>
+      <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--cream-dim);">Budgets (${state.budgetMode==='percentage'?totalBudgetPct+'%':'fixed'})</span><span>-${cur()}${fmt(budgetAmt)}</span></div>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;font-weight:700;"><span>Available for goals</span><span style="color:var(--income);">${cur()}${fmt(leftover)}</span></div>
+      </div>
+      ${activeGoals.length === 0 ? `<div style="text-align:center;color:var(--cream-dim);padding:12px;">All goals are complete! 🎉</div>` : `
+      <div style="font-size:11px;font-weight:600;color:var(--cream-dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Allocation</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+        ${splits.map(s => `
+          <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(127,185,138,0.1);border-radius:8px;padding:8px 10px;">
+            <span style="font-size:12px;">${escapeHtml(s.goal.name)}</span>
+            <span style="font-size:13px;font-weight:700;color:var(--income);">+${cur()}${fmt(s.amt)}</span>
+          </div>`).join('')}
+      </div>`}
+      <div class="modal-btn-row">
+        <button class="cancel" onclick="closeAutoSplit()">Cancel</button>
+        ${activeGoals.length > 0 ? `<button class="confirm" onclick="applyAutoSplit()">Apply</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+function applyAutoSplit() {
+  const incomeInput = parseFloat(state.autoSplitIncome) || getPeriodTotals('thisMonth').income;
+  const totalBudgetPct = Object.values(state.budgetsPercentage).reduce((a,b)=>a+b,0);
+  const budgetAmt = state.budgetMode === 'percentage' ? (incomeInput * totalBudgetPct / 100) : Object.values(state.budgets).reduce((a,b)=>a+b,0);
+  const leftover = Math.max(0, incomeInput - budgetAmt);
+  const activeGoals = state.goals.filter(g => g.saved < g.goal);
+  const totalRemaining = activeGoals.reduce((s, g) => s + Math.max(0, g.goal - g.saved), 0);
+  let totalAllocated = 0;
+  activeGoals.forEach(g => {
+    const need = Math.max(0, g.goal - g.saved);
+    const share = totalRemaining > 0 ? (need / totalRemaining) : (1 / activeGoals.length);
+    const amt = Math.min(need, leftover * share);
+    g.saved += amt;
+    totalAllocated += amt;
+  });
+  showToast(`${cur()}${fmt(totalAllocated)} split across ${activeGoals.length} goals`, 'success', 3000);
+  state.showAutoSplit = false;
+  saveState();
+  setTimeout(() => checkAchievements(), 400);
+  render();
+}
 
 function renderAddGoalModal() {
   return `
@@ -2394,6 +2527,10 @@ function renderAddTxn() {
     const budgetCats = Object.keys(state.budgets);
     const txnCats = [...new Set(state.txns.filter(t => t.type === 'expense' && t.cat && t.cat !== 'Subscription').map(t => t.cat))];
     const allCats = [...new Set([...budgetCats, ...txnCats])];
+    // Sort by most-used first
+    const catFreq = {};
+    state.txns.filter(t => t.type === 'expense' && t.cat).forEach(t => { catFreq[t.cat] = (catFreq[t.cat] || 0) + 1; });
+    allCats.sort((a, b) => (catFreq[b] || 0) - (catFreq[a] || 0));
     primaryCats = allCats.slice(0, 5);
     moreCats = allCats.slice(5);
     hasMore = moreCats.length > 0;
@@ -2518,10 +2655,10 @@ function toggleMore() {
 
 function toggleAllocate() {
   state.form.allocate = !state.form.allocate;
-  const sw = document.getElementById('allocate-switch');
-  const panel = document.getElementById('allocate-panel');
-  if (sw) sw.classList.toggle('on', state.form.allocate);
-  if (panel) panel.classList.toggle('open', state.form.allocate);
+  if (state.form.allocate && (!state.form.splitGoals || state.form.splitGoals.length === 0)) {
+    state.form.splitGoals = [{ goalId: null, pct: '' }];
+  }
+  render();
 }
 
 function setAllocateGoal(id) { state.form.allocateGoalId = id; render(); }
@@ -3628,18 +3765,50 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
+// ===== RESUME LOADER =====
+let resumeLoaderShown = false;
+
+function showResumeLoader() {
+  if (document.getElementById('resume-loader')) return;
+  const loader = document.createElement('div');
+  loader.id = 'resume-loader';
+  loader.style.cssText = `position:fixed;inset:0;background:var(--bg, #182922);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;`;
+  loader.innerHTML = `
+    <div style="opacity:0.85;">${lotusSVG(70)}</div>
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-style:italic;color:rgba(255,255,255,0.9);margin-top:14px;">Sprout</div>`;
+  document.body.appendChild(loader);
+  resumeLoaderShown = true;
+}
+
+function hideResumeLoader() {
+  const loader = document.getElementById('resume-loader');
+  if (!loader) return;
+  loader.style.transition = 'opacity 0.25s ease';
+  loader.style.opacity = '0';
+  setTimeout(() => { loader.remove(); resumeLoaderShown = false; }, 280);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (currentUser && state.setupComplete) showResumeLoader();
+  } else {
+    if (resumeLoaderShown) setTimeout(hideResumeLoader, 400);
+  }
+});
+
 // ================= APP INIT =================
 async function initApp() {
-  // Show auth screen immediately while we check session
+  // Render auth screen first so DOM is ready
   state.screen = 'auth';
   render();
+  // Then immediately cover it with the loader (DOM now exists)
+  showResumeLoader();
 
-  // onAuthStateChange fires immediately with INITIAL_SESSION if already logged in
-  // This is more reliable than getSession() for catching existing sessions
   db.auth.onAuthStateChange(async (event, session) => {
-    console.log('Auth event:', event, session?.user?.id);
-
     if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+      if (authInitialized && event === 'INITIAL_SESSION') return;
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') authInitialized = true;
+
       currentUser = session.user;
       await new Promise(r => setTimeout(r, 300));
       Object.assign(state, DEFAULT_STATE);
@@ -3647,32 +3816,34 @@ async function initApp() {
       if (!state.unlockedBadges) state.unlockedBadges = [];
 
       if (!state.setupComplete) {
-        // New user — pre-fill name then show setup
-        if (pendingSignupName) {
-          state.userName = pendingSignupName;
-          pendingSignupName = '';
-        } else if (!state.userName && currentUser.email) {
+        if (pendingSignupName) { state.userName = pendingSignupName; pendingSignupName = ''; }
+        else if (!state.userName && currentUser.email) {
           const emailName = currentUser.email.split('@')[0].replace(/[._-]/g, ' ');
           state.userName = emailName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
         state.screen = 'setup';
         state.setupStep = 1;
       } else {
-        // Returning user — go to splash
-        state.screen = 'splash';
+        // Skip splash — go straight to home
+        state.screen = 'home';
       }
 
+      hideResumeLoader();
       render();
       setTimeout(() => checkAchievements(), 2000);
       if (event === 'SIGNED_IN' && state.setupComplete) showToast('Welcome back! ☁️', 'success', 2500);
+
     } else if (event === 'INITIAL_SESSION' && !session) {
-      // No session — stay on auth screen
+      authInitialized = true;
+      hideResumeLoader();
       state.screen = 'auth';
       render();
     } else if (event === 'SIGNED_OUT') {
+      authInitialized = false;
       currentUser = null;
       localStorage.removeItem('sprout_data');
       Object.assign(state, DEFAULT_STATE);
+      hideResumeLoader();
       state.screen = 'auth';
       render();
     }
