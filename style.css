@@ -2472,9 +2472,7 @@ input[type=number] {
     box-shadow: none;
     aspect-ratio: unset;
     width: 100%;
-    /* visualViewport height set by JS for accurate iOS Safari sizing */
-    min-height: -webkit-fill-available;
-    min-height: 100dvh;
+    /* Height set precisely by JS via visualViewport */
   }
 
   body.is-browser #screen-content {

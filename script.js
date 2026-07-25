@@ -3640,12 +3640,14 @@ if (!isPWA) document.body.classList.add('is-browser');
 
 // In browser mode on mobile, set phone height to visible viewport
 // (excludes browser toolbar on iOS Safari via visualViewport)
+// Set phone height explicitly — works for both Safari browser and PWA
 function fixPhoneHeight() {
-  if (!isPWA || window.innerWidth > 500) return;
+  if (window.innerWidth > 500) return;
   const phone = document.getElementById('phone');
   if (!phone) return;
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   phone.style.height = h + 'px';
+  phone.style.minHeight = 'unset';
 }
 
 if (window.visualViewport) window.visualViewport.addEventListener('resize', fixPhoneHeight);
