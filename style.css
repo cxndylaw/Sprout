@@ -36,18 +36,12 @@ html {
   scroll-behavior: smooth;
   overflow: hidden;
   overscroll-behavior: none;
-  height: 100%;
-  height: -webkit-fill-available;
-  /* Fill safe areas with app background colour so no dark bar shows */
-  background: #182922;
 }
 
 body {
   font-family: 'Poppins', sans-serif;
   background: #182922;
   min-height: 100vh;
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -55,7 +49,6 @@ body {
   color: var(--cream);
   overflow: hidden;
   overscroll-behavior: none;
-  box-sizing: border-box;
 }
 
 #phone {
@@ -83,39 +76,32 @@ body {
 
 @media (max-width: 500px) {
   body {
-    padding: 0;
+    padding: 8px;
     align-items: stretch;
-    justify-content: flex-start;
-    height: 100dvh;
-    height: -webkit-fill-available;
   }
-
+  
   #phone {
-    border-radius: 0;
-    box-shadow: none;
-    aspect-ratio: unset;
-    width: 100%;
-    flex: 1;
-    min-height: 0;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .3), 0 0 0 2px #0f1a15;
   }
-
+  
   #screen-content {
     padding: 18px 14px 8px;
-    padding-top: calc(18px + env(safe-area-inset-top));
   }
 }
 
 @media (max-width: 420px) {
-  body { padding: 0; }
-
-  #phone {
-    border-radius: 0;
-    box-shadow: none;
+  body {
+    padding: 4px;
   }
-
+  
+  #phone {
+    border-radius: 16px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, .3), 0 0 0 1px #0f1a15;
+  }
+  
   #screen-content {
     padding: 16px 12px 6px;
-    padding-top: calc(16px + env(safe-area-inset-top));
   }
   
   .header-card,
@@ -786,13 +772,8 @@ button {
   background: rgba(60, 92, 76, 0.4);
   backdrop-filter: blur(12px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 10px 18px 10px;
+  padding: 10px 18px 16px;
   position: relative;
-}
-
-/* Only add safe area padding when in a browser (not installed PWA) */
-body.is-browser #bottom-nav {
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 
 .nav-btn {
@@ -2475,4 +2456,34 @@ input[type=number] {
   flex-direction: column;
   gap: 8px;
   margin-top: auto;
+}
+/* ===== BROWSER MODE (Safari/Chrome on phone, NOT installed PWA) ===== */
+/* Only applies when is-browser class is set by JS */
+
+@media (max-width: 500px) {
+  body.is-browser {
+    padding: 0;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  body.is-browser #phone {
+    border-radius: 0;
+    box-shadow: none;
+    aspect-ratio: unset;
+    width: 100%;
+    /* visualViewport height set by JS for accurate iOS Safari sizing */
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
+  }
+
+  body.is-browser #screen-content {
+    padding: 14px 14px 8px;
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+
+  body.is-browser #bottom-nav {
+    /* Push nav above browser toolbar using safe area */
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
 }
