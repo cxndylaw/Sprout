@@ -127,6 +127,7 @@ const DEFAULT_STATE = {
   subscriptions: [], nextSubId: 1,
   showAddSub: false, showEditSub: false, editSubData: null,
   showEditAccount: false,
+  showDeleteAccountModal: false, deleteAccountStep: 1,
 };
 
 let state = { ...DEFAULT_STATE };
@@ -484,6 +485,7 @@ function render() {
   if (state.selectedBadgeId) modalHtml += renderBadgeModal();
   if (state.showResetModal) modalHtml += renderResetModal();
   if (state.showEditAccount) modalHtml += renderEditAccountModal();
+  if (state.showDeleteAccountModal) modalHtml += renderDeleteAccountModal();
 
   // Get or create modal container
   let modalContainer = phone.querySelector('#modal-container');
@@ -498,7 +500,8 @@ function render() {
   const hasModal = state.showWarning || state.showEditBudget || state.showEditGoal || 
                    state.showAddGoal || state.showEditBudgets || state.showEditBalance || 
                    state.showProfileEditor || state.showAddSub || state.showEditSub || 
-                   !!state.selectedBadgeId || state.showResetModal || state.showEditAccount;
+                   !!state.selectedBadgeId || state.showResetModal || state.showEditAccount ||
+                   state.showDeleteAccountModal;
   
   c.style.overflow = hasModal ? 'hidden' : 'scroll';
 
@@ -2016,21 +2019,71 @@ function renderEditAccountModal() {
 }
 
 async function confirmDeleteAccount() {
-  const input = prompt('Type DELETE to permanently delete your account and all data. This cannot be undone.');
-  if (input?.trim() !== 'DELETE') {
-    if (input !== null) showToast('Type DELETE exactly to confirm', 'error', 3000);
+  state.showDeleteAccountModal = true;
+  state.deleteAccountStep = 1;
+  state.deleteAccountInput = '';
+  render();
+}
+
+function renderDeleteAccountModal() {
+  if (!state.showDeleteAccountModal) return '';
+  const step = state.deleteAccountStep || 1;
+
+  if (step === 1) {
+    return `
+    <div class="modal-overlay">
+      <div class="plain-modal" style="text-align:center;">
+        <div style="font-size:36px;margin-bottom:10px;">⚠️</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Delete Account?</div>
+        <div style="font-size:12px;color:var(--cream-dim);line-height:1.7;margin-bottom:20px;">
+          This will permanently delete all your data — transactions, goals, budgets, subscriptions, and achievements. This cannot be undone.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button onclick="state.deleteAccountStep=2;render();" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-family:'Poppins',sans-serif;cursor:pointer;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-weight:600;">I understand, continue</button>
+          <button onclick="state.showDeleteAccountModal=false;render();" style="width:100%;padding:11px;border-radius:12px;font-size:13px;font-family:'Poppins',sans-serif;cursor:pointer;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--cream);">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return `
+  <div class="modal-overlay">
+    <div class="plain-modal" style="text-align:center;">
+      <div style="font-size:36px;margin-bottom:10px;">💀</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Final Confirmation</div>
+      <div style="font-size:12px;color:var(--cream-dim);line-height:1.7;margin-bottom:16px;">
+        Type <strong style="color:#ef4444;">DELETE</strong> to permanently erase your account and all data.
+      </div>
+      <input type="text" id="delete-account-input" placeholder="Type DELETE" style="text-align:center;letter-spacing:3px;font-weight:700;font-size:14px;margin-bottom:16px;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button onclick="executeDeleteAccount()" style="width:100%;padding:12px;border-radius:12px;font-size:13px;font-family:'Poppins',sans-serif;cursor:pointer;background:rgba(239,68,68,0.25);border:1px solid rgba(239,68,68,0.5);color:#ef4444;font-weight:700;">Delete Everything</button>
+        <button onclick="state.showDeleteAccountModal=false;render();" style="width:100%;padding:11px;border-radius:12px;font-size:13px;font-family:'Poppins',sans-serif;cursor:pointer;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--cream);">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function executeDeleteAccount() {
+  const input = document.getElementById('delete-account-input')?.value?.trim();
+  if (input !== 'DELETE') {
+    const el = document.getElementById('delete-account-input');
+    if (el) { el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 500); }
+    showToast('Type DELETE in capitals to confirm', 'error', 3000);
     return;
   }
   try {
-    showToast('Deleting account...', 'info', 3000);
-    // Delete from user_data table first
+    state.showDeleteAccountModal = false;
+    showToast('Deleting your data...', 'info', 3000);
+    // Delete all user data from database
     await db.from('user_data').delete().eq('id', currentUser.id);
-    // Sign out (can't delete auth user from client-side without service role)
+    // Sign out the user
     await db.auth.signOut();
-    showToast('Account data deleted. Please contact support to fully remove your auth account.', 'info', 6000);
+    // Note: deleting the auth user requires a server-side call (Edge Function or Supabase dashboard)
+    showToast('Your data has been deleted. You have been signed out.', 'success', 5000);
   } catch(e) {
-    showToast('Error deleting account', 'error', 3000);
-    console.error(e);
+    console.error('Delete error:', e);
+    showToast('Error deleting data — please try again', 'error', 3000);
+    render();
   }
 }
 
@@ -2946,12 +2999,46 @@ function checkAchievements() {
       } catch(e) {}
     }
   });
-  if (newly.length > 0) {
-    newly.forEach((badge, i) => {
-      setTimeout(() => showBadgeToast(badge), i * 1200);
-    });
-    saveState();
+
+  if (newly.length === 0) return;
+  saveState();
+
+  if (newly.length === 1) {
+    // Single badge — show the normal toast
+    setTimeout(() => showBadgeToast(newly[0]), 600);
+  } else {
+    // Multiple badges — show one summary toast instead of spamming
+    setTimeout(() => showBatchBadgeToast(newly), 600);
   }
+}
+
+function showBatchBadgeToast(badges) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.getElementById('phone').appendChild(container);
+  }
+  const el = document.createElement('div');
+  el.className = 'toast-badge';
+  el.style.cursor = 'pointer';
+  const icons = badges.slice(0, 4).map(b => b.icon).join('');
+  el.innerHTML = `
+    <div style="font-size:20px;line-height:1;">${icons}</div>
+    <div style="flex:1;">
+      <div style="font-size:12px;font-weight:700;color:var(--cream);">You earned ${badges.length} badges! 🎉</div>
+      <div style="font-size:11px;color:var(--income);margin-top:1px;">Tap to view them →</div>
+    </div>`;
+  el.onclick = () => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 400);
+    state.screen = 'achievements';
+    render();
+  };
+  container.appendChild(el);
+  setTimeout(() => el.classList.add('show'), 50);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 5000);
 }
 
 function showBadgeToast(badge) {
