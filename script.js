@@ -25,6 +25,8 @@ const ICON = {
   edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L21 6Z"/></svg>`,
   subscription: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></svg>`,
   achievement: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>`,
+  pencil: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>`,
+  calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
   mail: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <rect x="3" y="5" width="18" height="14" rx="2"/>
   <path d="M3 7l9 6 9-6"/>
@@ -1137,105 +1139,129 @@ function renderBank() {
   const t = totals();
   const bankTxns = getBankPeriodTransactions();
   
-  // Filter transactions by category if selected
   let rows = sortedList(bankTxns);
-  if (state.bankFilterCat) {
-    rows = rows.filter(tx => tx.cat === state.bankFilterCat);
-  }
-  
-  // Filter by transaction type (income/expense)
-  if (state.bankFilterType === 'income') {
-    rows = rows.filter(tx => tx.type === 'income');
-  } else if (state.bankFilterType === 'expense') {
-    rows = rows.filter(tx => tx.type === 'expense');
-  }
-  
-  // Filter by search query
-  if (state.bankSearchQuery) {
-    rows = rows.filter(tx => (tx.desc || tx.cat).toLowerCase().includes(state.bankSearchQuery.toLowerCase()));
-  }
-  
-  let listHtml = '';
-  if (rows.length === 0) {
-    listHtml = `<div class="empty-note">No transactions in this period — tap + to add one</div>`;
-  } else {
-    let lastDate = null;
-    rows.forEach((tx, i) => {
-      if (tx.date !== lastDate) {
-        listHtml += `<div class="txn-date-row">${dmy(tx.date)}</div>`;
-        lastDate = tx.date;
-      }
-      const iconKey = CAT_ICON[tx.cat] || 'misc';
-      const icon = ICON[iconKey];
-      const color = CAT_COLOR[tx.cat] || (tx.type === 'income' ? '#10b981' : '#6b7280');
-      listHtml += `
-      <button class="txn-row" style="animation-delay:${Math.min(i * 0.03, .4)}s" onclick="openTxnDetail(${tx.id})">
-        <div class="txn-left">
-          <div class="txn-icon" style="background:${color}20;color:${color};">${icon}</div>
-          <div>
-            <div class="txn-desc">${escapeHtml(tx.desc || tx.cat)}</div>
-            <div class="txn-cat">${tx.cat || 'Uncategorised'}</div>
-          </div>
-        </div>
-        <div class="txn-amt ${tx.type}">${tx.type === 'income' ? '+' : '-'}${cur()}${fmt(tx.amount)}</div>
-      </button>`;
-    });
-  }
+  if (state.bankFilterCat) rows = rows.filter(tx => tx.cat === state.bankFilterCat);
+  if (state.bankFilterType === 'income') rows = rows.filter(tx => tx.type === 'income');
+  else if (state.bankFilterType === 'expense') rows = rows.filter(tx => tx.type === 'expense');
+  if (state.bankSearchQuery) rows = rows.filter(tx => (tx.desc || tx.cat).toLowerCase().includes(state.bankSearchQuery.toLowerCase()));
 
-  // Get all expense categories for this period
   const expensesByCategory = {};
   bankTxns.filter(t => t.type === 'expense').forEach(t => {
     expensesByCategory[t.cat] = (expensesByCategory[t.cat] || 0) + t.amount;
   });
 
+  const periodIncome = bankTxns.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const periodExpense = bankTxns.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const net = periodIncome - periodExpense;
+
+  // Build transaction list grouped by date
+  let listHtml = '';
+  if (rows.length === 0) {
+    listHtml = `<div style="text-align:center;padding:40px 20px;color:var(--cream-dim);font-size:13px;">No transactions found</div>`;
+  } else {
+    let lastDate = null;
+    rows.forEach((tx, i) => {
+      if (tx.date !== lastDate) {
+        if (lastDate !== null) listHtml += `</div>`;
+        listHtml += `<div class="txn-group-label">${dmy(tx.date)}</div><div class="txn-group">`;
+        lastDate = tx.date;
+      }
+      const iconKey = CAT_ICON[tx.cat] || 'misc';
+      const color = CAT_COLOR[tx.cat] || (tx.type === 'income' ? '#10b981' : '#6b7280');
+      listHtml += `
+      <button class="txn-row2" onclick="openTxnDetail(${tx.id})">
+        <div class="txn-icon2" style="background:${color}18;color:${color};">
+          ${ICON[iconKey]}
+        </div>
+        <div class="txn-mid">
+          <div class="txn-desc2">${escapeHtml(tx.desc || tx.cat)}</div>
+          <div class="txn-cat2">${tx.cat || 'Uncategorised'}</div>
+        </div>
+        <div class="txn-amt2 ${tx.type}">${tx.type === 'income' ? '+' : '-'}${cur()}${fmt(tx.amount)}</div>
+      </button>`;
+    });
+    if (lastDate !== null) listHtml += `</div>`;
+  }
+
+  const periodLabel = state.bankPeriod === 'thisMonth' ? 'This Month' : state.bankPeriod === 'lastMonth' ? 'Last Month' : state.bankPeriod === 'year' ? 'This Year' : 'All Time';
+
   return `
-  <div class="card">
-    <button class="eye-row" onclick="toggleBalanceVisibility()">${state.balanceHidden ? ICON.eyeOff : ICON.eye} ${state.userName}'s Bank</button>
-    <div class="big-number" id="bank-balance">${state.balanceHidden ? '•••••' : cur() + ' ' + fmt(t.balance)}</div>
+  <!-- Hero balance card -->
+  <div class="bank-hero-card">
+    <div class="bank-hero-top">
+      <div>
+        <div class="bank-hero-label">${state.balanceHidden ? '••••••' : 'Total Balance'}</div>
+        <div class="bank-hero-balance" id="bank-balance">${state.balanceHidden ? '••••••' : cur() + ' ' + fmt(t.balance)}</div>
+      </div>
+      <button onclick="toggleBalanceVisibility()" style="background:rgba(255,255,255,0.08);border:none;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--cream-dim);flex-shrink:0;">${state.balanceHidden ? ICON.eyeOff : ICON.eye}</button>
+    </div>
+    <div class="bank-hero-stats">
+      <div class="bank-stat">
+        <div class="bank-stat-label">↑ Income</div>
+        <div class="bank-stat-val income">${cur()}${fmt(periodIncome)}</div>
+      </div>
+      <div class="bank-stat-divider"></div>
+      <div class="bank-stat">
+        <div class="bank-stat-label">↓ Expenses</div>
+        <div class="bank-stat-val expense">${cur()}${fmt(periodExpense)}</div>
+      </div>
+      <div class="bank-stat-divider"></div>
+      <div class="bank-stat">
+        <div class="bank-stat-label">Net</div>
+        <div class="bank-stat-val" style="color:${net>=0?'var(--income)':'var(--expense)'};">${net>=0?'+':''}${cur()}${fmt(Math.abs(net))}</div>
+      </div>
+    </div>
   </div>
 
-  <div class="card">
-    <div style="font-weight:600;margin-bottom:12px;">Spending by Category</div>
+  <!-- Pie chart card -->
+  ${Object.keys(expensesByCategory).length > 0 ? `
+  <div class="card" style="margin-bottom:14px;padding:14px 16px;">
+    <div style="font-size:12px;font-weight:600;color:var(--cream-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Spending Breakdown</div>
     ${categoryPieChart(expensesByCategory)}
+  </div>` : ''}
+
+  <!-- Search -->
+  <div class="bank-search-wrap">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="color:var(--cream-dim);flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" placeholder="Search transactions..." value="${state.bankSearchQuery}" oninput="searchTransactions(this.value)" class="bank-search-input">
+    ${state.bankSearchQuery ? `<button onclick="searchTransactions('')" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;font-size:16px;padding:0;line-height:1;">✕</button>` : ''}
   </div>
 
-  <div style="margin-bottom:12px;">
-    <input type="text" id="txn-search" placeholder="Search transactions..." value="${state.bankSearchQuery}" onchange="searchTransactions(this.value)" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(74,107,88,0.2);color:var(--cream);font-size:12px;" />
+  <!-- Filter bar -->
+  <div class="bank-filter-bar">
+    <div class="category-filter">
+      <button class="bank-chip ${state.bankFilterType!=='all'?'active':''}" onclick="toggleBankTypeFilter()">
+        ${state.bankFilterType==='all'?'All':state.bankFilterType==='income'?'↑ Income':'↓ Expense'} ${ICON.chevron}
+      </button>
+      <div class="filter-menu" id="bank-type-menu" style="display:none;">
+        <button onclick="setBankFilterType('all')" class="${state.bankFilterType==='all'?'active':''}">All</button>
+        <button onclick="setBankFilterType('income')" class="${state.bankFilterType==='income'?'active':''}">↑ Income</button>
+        <button onclick="setBankFilterType('expense')" class="${state.bankFilterType==='expense'?'active':''}">↓ Expense</button>
+      </div>
+    </div>
+    <div class="category-filter">
+      <button class="bank-chip ${state.bankFilterCat?'active':''}" onclick="toggleCategoryFilter()">
+        ${state.bankFilterCat || 'Category'} ${ICON.chevron}
+      </button>
+      <div class="filter-menu" id="cat-filter-menu" style="display:none;">
+        <button onclick="setCategoryFilter(null)">All Categories</button>
+        ${Object.keys(expensesByCategory).map(cat => `<button onclick="setCategoryFilter('${cat}')">${cat}</button>`).join('')}
+      </div>
+    </div>
+    <div class="category-filter">
+      <button class="bank-chip" onclick="toggleBankPeriodFilter()">${periodLabel} ${ICON.chevron}</button>
+      <div class="filter-menu" id="bank-period-menu" style="display:none;">
+        <button onclick="setBankPeriod('thisMonth')">This Month</button>
+        <button onclick="setBankPeriod('lastMonth')">Last Month</button>
+        <button onclick="setBankPeriod('year')">This Year</button>
+        <button onclick="setBankPeriod('allTime')">All Time</button>
+      </div>
+    </div>
   </div>
 
-  <div class="txn-header">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span style="font-weight:600;">Transactions</span>
-      <div class="category-filter">
-        <button class="filter-btn" onclick="toggleBankTypeFilter()">Filter ${ICON.chevron}</button>
-        <div class="filter-menu" id="bank-type-menu" style="display:none;">
-          <button onclick="setBankFilterType('all')" class="${state.bankFilterType === 'all' ? 'active' : ''}">All</button>
-          <button onclick="setBankFilterType('income')" class="${state.bankFilterType === 'income' ? 'active' : ''}">Income</button>
-          <button onclick="setBankFilterType('expense')" class="${state.bankFilterType === 'expense' ? 'active' : ''}">Expense</button>
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;gap:6px;align-items:center;">
-      <div class="category-filter">
-        <button class="filter-btn" onclick="toggleCategoryFilter()">${state.bankFilterCat ? state.bankFilterCat : 'Category'} ${ICON.chevron}</button>
-        <div class="filter-menu" id="cat-filter-menu" style="display:none;">
-          <button onclick="setCategoryFilter(null)">All</button>
-          ${Object.keys(expensesByCategory).map(cat => `<button onclick="setCategoryFilter('${cat}')">${cat}</button>`).join('')}
-        </div>
-      </div>
-      <div class="category-filter">
-        <button class="filter-btn" onclick="toggleBankPeriodFilter()">${state.bankPeriod === 'thisMonth' ? 'This Month' : state.bankPeriod === 'lastMonth' ? 'Last Month' : state.bankPeriod === 'year' ? 'This Year' : 'All Time'} ${ICON.chevron}</button>
-        <div class="filter-menu" id="bank-period-menu" style="display:none;">
-          <button onclick="setBankPeriod('thisMonth')">This Month</button>
-          <button onclick="setBankPeriod('lastMonth')">Last Month</button>
-          <button onclick="setBankPeriod('year')">This Year</button>
-          <button onclick="setBankPeriod('allTime')">All Time</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="txn-list">${listHtml}</div>
-  <div style="margin-top:24px;text-align:center;" class="dim">Tap a transaction to view details</div>
+  <!-- Transactions -->
+  <div class="txn-feed">${listHtml}</div>
+  <div style="height:8px;"></div>
   `;
 }
 
@@ -1243,40 +1269,49 @@ function categoryPieChart(expensesByCategory) {
   const total = Object.values(expensesByCategory).reduce((a, b) => a + b, 0);
   if (total === 0) return `<div class="dim" style="text-align:center;padding:20px;">No expenses this period</div>`;
   
-  const colors = ['#7fb98a', '#f5a962', '#e2a99a', '#a8d5ba', '#ffc9a3', '#d4a5a5', '#b8c5d6'];
+  const colors = ['#7fb98a','#f5a962','#e07a7a','#6baed6','#a78bfa','#f59e0b','#10b981','#ec4899'];
   const entries = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1]);
-  
-  let svg = `<svg class="pie-chart-horizontal" width="160" height="160" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">`;
-  let currentAngle = -90;
-  
-  entries.forEach((entry, i) => {
-    const [cat, amount] = entry;
-    const sliceAngle = (amount / total) * 360;
-    const startAngle = currentAngle * Math.PI / 180;
-    const endAngle = (currentAngle + sliceAngle) * Math.PI / 180;
-    
-    const x1 = 100 + 60 * Math.cos(startAngle);
-    const y1 = 100 + 60 * Math.sin(startAngle);
-    const x2 = 100 + 60 * Math.cos(endAngle);
-    const y2 = 100 + 60 * Math.sin(endAngle);
-    const largeArc = sliceAngle > 180 ? 1 : 0;
-    
-    const pathData = `M 100 100 L ${x1} ${y1} A 60 60 0 ${largeArc} 1 ${x2} ${y2} Z`;
-    svg += `<path d="${pathData}" fill="${colors[i % colors.length]}" stroke="#243b30" stroke-width="2"/>`;
-    
-    currentAngle += sliceAngle;
-  });
-  
+  const R = 70, r = 44, cx = 100, cy = 100;
+
+  let svg = `<svg width="160" height="160" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">`;
+
+  if (entries.length === 1) {
+    // Single category — full donut circle
+    svg += `<circle cx="${cx}" cy="${cy}" r="${(R+r)/2}" fill="none" stroke="${colors[0]}" stroke-width="${R-r}" opacity="0.9"/>`;
+    svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="rgba(0,0,0,0.2)"/>`;
+  } else {
+    let currentAngle = -90;
+    entries.forEach((entry, i) => {
+      const [cat, amount] = entry;
+      const sliceAngle = (amount / total) * 360;
+      const sa = currentAngle * Math.PI / 180;
+      const ea = (currentAngle + sliceAngle - 0.5) * Math.PI / 180;
+      const x1o = cx + R * Math.cos(sa), y1o = cy + R * Math.sin(sa);
+      const x2o = cx + R * Math.cos(ea), y2o = cy + R * Math.sin(ea);
+      const x1i = cx + r * Math.cos(ea), y1i = cy + r * Math.sin(ea);
+      const x2i = cx + r * Math.cos(sa), y2i = cy + r * Math.sin(sa);
+      const large = sliceAngle > 180 ? 1 : 0;
+      svg += `<path d="M${x1o},${y1o} A${R},${R} 0 ${large} 1 ${x2o},${y2o} L${x1i},${y1i} A${r},${r} 0 ${large} 0 ${x2i},${y2i} Z" fill="${colors[i % colors.length]}" opacity="0.9"/>`;
+      currentAngle += sliceAngle;
+    });
+    svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="rgba(0,0,0,0.2)"/>`;
+  }
+
+  // Centre label
+  const topCat = entries[0];
+  const topPct = Math.round((topCat[1] / total) * 100);
+  svg += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-size="16" font-weight="700" font-family="Poppins,sans-serif">${topPct}%</text>`;
+  svg += `<text x="${cx}" y="${cy + 10}" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="9" font-family="Poppins,sans-serif">${topCat[0].slice(0,10)}</text>`;
   svg += `</svg>`;
-  
+
   let legend = '<div class="pie-legend-horizontal">';
-  entries.forEach((entry, i) => {
+  entries.slice(0, 5).forEach((entry, i) => {
     const [cat, amount] = entry;
     const pct = Math.round((amount / total) * 100);
-    legend += `<div class="legend-item-large"><span class="legend-color" style="background:${colors[i % colors.length]};"></span><span>${cat}: ${pct}%</span></div>`;
+    legend += `<div class="legend-item-large"><span class="legend-color" style="background:${colors[i % colors.length]};border-radius:3px;"></span><span>${cat} <span style="opacity:0.6;">${pct}%</span></span></div>`;
   });
   legend += '</div>';
-  
+
   return `<div class="pie-chart-container">${legend}${svg}</div>`;
 }
 
@@ -2352,35 +2387,23 @@ function renderAddTxn() {
     }
   }
 
+  let primaryCats = [], moreCats = [], hasMore = false, splitRows = '', splits = [], totalPct = 0, incomeAmt = 0, pctColor = '';
+
   let bodyExtra = '';
   if (isExpense) {
-    // Merge budget cats + cats that exist in transactions (so deleting a budget doesn't lose history)
     const budgetCats = Object.keys(state.budgets);
     const txnCats = [...new Set(state.txns.filter(t => t.type === 'expense' && t.cat && t.cat !== 'Subscription').map(t => t.cat))];
     const allCats = [...new Set([...budgetCats, ...txnCats])];
-    const primaryCats = allCats.slice(0, 5);
-    const moreCats = allCats.slice(5);
-    const hasMore = moreCats.length > 0;
-    
-    bodyExtra = `
-    <div class="field-label">Category</div>
-    <div class="cat-grid">
-      ${primaryCats.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
-      <button class="cat-chip ${f.cat === 'Subscription' ? 'selected' : ''}" onclick="setTxnCat('Subscription')">Subscription</button>
-      ${hasMore ? `<button class="cat-chip" onclick="toggleMore()">${f.moreOpen ? 'Less...' : 'More...'}</button>` : ''}
-    </div>
-    ${hasMore ? `<div class="more-panel ${f.moreOpen ? 'open' : ''}" id="more-panel">
-      ${moreCats.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
-    </div>` : ''}
-    ${budgetInfo}`;
+    primaryCats = allCats.slice(0, 5);
+    moreCats = allCats.slice(5);
+    hasMore = moreCats.length > 0;
   } else {
-    const splits = f.splitGoals || [];
-    const totalPct = splits.reduce((sum, s) => sum + (parseFloat(s.pct) || 0), 0);
-    const incomeAmt = parseFloat(f.amount) || 0;
-    const pctColor = totalPct > 100 ? 'var(--red-bar)' : totalPct === 100 ? 'var(--green-bar)' : 'var(--amber-bar)';
+    splits = f.splitGoals || [];
+    totalPct = splits.reduce((sum, s) => sum + (parseFloat(s.pct) || 0), 0);
+    incomeAmt = parseFloat(f.amount) || 0;
+    pctColor = totalPct > 100 ? 'var(--red-bar)' : totalPct === 100 ? 'var(--green-bar)' : 'var(--amber-bar)';
 
-    const splitRows = splits.map((s, i) => {
-      const goal = state.goals.find(g => g.id === s.goalId);
+    splitRows = splits.map((s, i) => {
       const allocated = incomeAmt > 0 ? (incomeAmt * (parseFloat(s.pct) || 0)) / 100 : 0;
       return `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
@@ -2396,8 +2419,66 @@ function renderAddTxn() {
         <button onclick="removeSplit(${i})" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;padding:4px;font-size:14px;flex-shrink:0;">✕</button>
       </div>`;
     }).join('');
+  }
 
-    bodyExtra = `
+  return `
+  <div class="form-page ${themeClass}">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+      <button class="back-btn" onclick="goTo('home')">${ICON.back}</button>
+      <div style="font-size:16px;font-weight:700;">New Transaction</div>
+      <div style="width:36px;"></div>
+    </div>
+
+    <!-- Type toggle - large pill -->
+    <div class="txn-type-toggle">
+      <button class="txn-type-btn ${!isExpense ? 'income-active' : ''}" onclick="setTxnType('income')">
+        <span style="font-size:16px;">↑</span> Income
+      </button>
+      <button class="txn-type-btn ${isExpense ? 'expense-active' : ''}" onclick="setTxnType('expense')">
+        <span style="font-size:16px;">↓</span> Expense
+      </button>
+    </div>
+
+    <!-- Amount - big and central -->
+    <div class="txn-amount-hero">
+      <div class="txn-currency-sym">${cur()}</div>
+      <input type="number" id="f-amount" placeholder="0.00" value="${f.amount}" oninput="state.form.amount=this.value" class="txn-amount-input">
+    </div>
+
+    <!-- Description -->
+    <div class="txn-field-group">
+      <div class="txn-field-row">
+        <div class="txn-field-icon">${ICON.pencil}</div>
+        <input type="text" id="f-desc" placeholder="Description" value="${escapeHtml(f.desc)}" oninput="state.form.desc=this.value" class="txn-field-input">
+      </div>
+      <div class="txn-field-row">
+        <div class="txn-field-icon">${ICON.calendar}</div>
+        <input type="date" id="f-date" value="${f.date}" onchange="state.form.date=this.value" class="txn-field-input">
+      </div>
+    </div>
+
+    <!-- Category -->
+    <div class="txn-section-label">Category</div>
+    <div class="cat-grid" style="margin-bottom:${isExpense && f.moreOpen ? '4px' : '14px'};">
+      ${isExpense ? `
+        ${primaryCats.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
+        <button class="cat-chip ${f.cat === 'Subscription' ? 'selected' : ''}" onclick="setTxnCat('Subscription')">Subscription</button>
+        ${hasMore ? `<button class="cat-chip" onclick="toggleMore()">${f.moreOpen ? 'Less ↑' : 'More ↓'}</button>` : ''}
+      ` : `
+        ${INCOME_CATS.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
+      `}
+    </div>
+    ${isExpense && hasMore ? `<div class="more-panel ${f.moreOpen ? 'open' : ''}" id="more-panel">
+      ${moreCats.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
+    </div>` : ''}
+
+    <!-- Budget info (expense only) -->
+    ${budgetInfo}
+
+    <!-- Goal split (income only) -->
+    ${!isExpense ? `
     <div class="allocate-row">
       <span>Split into goals?</span>
       <button class="switch ${f.allocate ? 'on' : ''}" onclick="toggleAllocate()"><span class="knob"></span></button>
@@ -2411,37 +2492,10 @@ function renderAddTxn() {
         <span style="font-size:13px;font-weight:700;color:${pctColor};" id="split-total">${totalPct}%${incomeAmt > 0 ? ` · ${cur()}${fmt(incomeAmt * totalPct / 100)}` : ''}</span>
       </div>
       ${totalPct > 100 ? `<div style="font-size:11px;color:var(--red-bar);text-align:center;">Total exceeds 100%</div>` : ''}` : ''}
-    </div>
-    <div class="field-label">Category</div>
-    <div class="cat-grid">
-      ${INCOME_CATS.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
-    </div>`;
-  }
+    </div>` : ''}
 
-  return `
-  <div class="form-page ${themeClass}">
-    <div class="form-header">
-      <button class="back-btn" onclick="goTo('home')">${ICON.back} Back</button>
-      <h2>Add Transaction</h2>
-    </div>
-
-    <div class="field-label">Description</div>
-    <div class="field"><input type="text" id="f-desc" placeholder="e.g. Coffee with a friend" value="${escapeHtml(f.desc)}" oninput="state.form.desc=this.value"></div>
-
-    <div class="field-label">Amount</div>
-    <div class="amount-wrap"><span>${cur()}</span><input type="number" id="f-amount" placeholder="0.00" value="${f.amount}" oninput="state.form.amount=this.value"></div>
-
-    <div class="field-label">Date</div>
-    <div class="field"><input type="date" id="f-date" value="${f.date}" onchange="state.form.date=this.value"></div>
-
-    <div class="type-toggle">
-      <button class="type-btn income ${f.type === 'income' ? 'selected' : ''}" onclick="setTxnType('income')">Income</button>
-      <button class="type-btn expense ${f.type === 'expense' ? 'selected' : ''}" onclick="setTxnType('expense')">Expense</button>
-    </div>
-
-    ${bodyExtra}
-
-    <button class="save-btn" id="save-btn" onclick="saveTxn()">Save</button>
+    <!-- Save button -->
+    <button class="save-btn" id="save-btn" onclick="saveTxn()">Save Transaction</button>
   </div>`;
 }
 

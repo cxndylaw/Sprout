@@ -2487,3 +2487,362 @@ input[type=number] {
     padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
 }
+
+/* ===== REDESIGNED BANK PAGE ===== */
+
+/* Hero card */
+.bank-hero-card {
+  background: linear-gradient(135deg, rgba(74,107,88,0.6) 0%, rgba(42,71,56,0.8) 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 20px 18px 16px;
+  margin-bottom: 14px;
+}
+
+.bank-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.bank-hero-label {
+  font-size: 11px;
+  color: var(--cream-dim);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.bank-hero-balance {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--cream);
+  letter-spacing: -0.5px;
+}
+
+.bank-hero-stats {
+  display: flex;
+  align-items: center;
+  background: rgba(0,0,0,0.15);
+  border-radius: 12px;
+  padding: 10px 14px;
+  gap: 0;
+}
+
+.bank-stat {
+  flex: 1;
+  text-align: center;
+}
+
+.bank-stat-label {
+  font-size: 10px;
+  color: var(--cream-dim);
+  margin-bottom: 3px;
+}
+
+.bank-stat-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.bank-stat-val.income { color: var(--income); }
+.bank-stat-val.expense { color: #e2a99a; }
+
+.bank-stat-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255,255,255,0.1);
+  margin: 0 4px;
+}
+
+/* Search */
+.bank-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(63,92,76,0.35);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+
+.bank-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--cream);
+  font-size: 13px;
+  font-family: 'Poppins', sans-serif;
+  outline: none;
+}
+
+.bank-search-input::placeholder { color: rgba(255,255,255,0.3); }
+
+/* Filter chips */
+.bank-filter-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.bank-chip {
+  background: rgba(63,92,76,0.35);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--cream-dim);
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: all .2s;
+}
+
+.bank-chip.active {
+  background: rgba(127,185,138,0.25);
+  border-color: rgba(127,185,138,0.5);
+  color: var(--cream);
+  font-weight: 600;
+}
+
+.bank-chip svg { width: 10px; height: 10px; }
+
+/* Transaction feed */
+.txn-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.txn-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cream-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 16px 2px 6px;
+}
+
+.txn-group-label:first-child {
+  padding-top: 0;
+}
+
+.txn-group {
+  background: rgba(55,80,64,0.3);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.txn-row2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  cursor: pointer;
+  text-align: left;
+  transition: background .15s;
+}
+
+.txn-row2:last-child {
+  border-bottom: none;
+}
+
+.txn-row2:active {
+  background: rgba(255,255,255,0.04);
+}
+
+.txn-icon2 {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.txn-icon2 svg {
+  width: 16px;
+  height: 16px;
+}
+
+.txn-mid {
+  flex: 1;
+  min-width: 0;
+}
+
+.txn-desc2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txn-cat2 {
+  font-size: 11px;
+  color: var(--cream-dim);
+  margin-top: 1px;
+}
+
+.txn-amt2 {
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.txn-amt2.income { color: var(--income); }
+.txn-amt2.expense { color: #e2a99a; }
+
+/* ===== REDESIGNED ADD TRANSACTION ===== */
+.txn-type-toggle {
+  display: flex;
+  gap: 8px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 16px;
+  padding: 4px;
+  margin-bottom: 24px;
+}
+
+.txn-type-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255,255,255,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all .25s ease;
+}
+
+.txn-type-btn.income-active {
+  background: rgba(16,185,129,0.25);
+  color: var(--income);
+  border: 1px solid rgba(16,185,129,0.3);
+}
+
+.txn-type-btn.expense-active {
+  background: rgba(201,107,92,0.25);
+  color: #e2a99a;
+  border: 1px solid rgba(201,107,92,0.3);
+}
+
+.txn-amount-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+.txn-currency-sym {
+  font-size: 28px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.5);
+  padding-bottom: 4px;
+}
+
+.txn-amount-input {
+  background: none;
+  border: none;
+  font-size: 42px;
+  font-weight: 700;
+  color: var(--cream);
+  font-family: 'Poppins', sans-serif;
+  width: 100%;
+  text-align: center;
+  outline: none;
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.txn-amount-input::placeholder { color: rgba(255,255,255,0.2); }
+
+.txn-field-group {
+  background: rgba(63,92,76,0.3);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.txn-field-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.txn-field-row:last-child { border-bottom: none; }
+
+.txn-field-icon {
+  font-size: 16px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--cream-dim);
+}
+
+.txn-field-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.txn-field-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--cream);
+  font-size: 14px;
+  font-family: 'Poppins', sans-serif;
+  outline: none;
+}
+
+.txn-field-input::placeholder { color: rgba(255,255,255,0.3); }
+input[type=date].txn-field-input { color-scheme: dark; }
+
+.txn-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cream-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 10px;
+}
+
+/* Eye icon in bank hero - small */
+.bank-hero-top button svg {
+  width: 14px;
+  height: 14px;
+}
