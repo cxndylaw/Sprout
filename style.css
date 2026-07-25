@@ -53,6 +53,8 @@ body {
   color: var(--cream);
   overflow: hidden;
   overscroll-behavior: none;
+  /* Prevent body from stretching wider than viewport on desktop */
+  box-sizing: border-box;
 }
 
 #phone {
@@ -143,6 +145,8 @@ body {
   overflow-y: scroll;
   overflow-x: hidden;
   padding: 50px 18px 10px;
+  /* On real mobile browsers, add safe area at top (status bar) */
+  padding-top: calc(50px + env(safe-area-inset-top));
   scrollbar-width: none;
   position: relative;
   overscroll-behavior: contain;
