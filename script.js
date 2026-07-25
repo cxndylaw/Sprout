@@ -564,21 +564,23 @@ const isPWA = window.matchMedia('(display-mode: standalone)').matches
 // Apply body class immediately so CSS can target browser vs PWA reliably
 if (!isPWA) document.body.classList.add('is-browser');
 
-// For webapp: ensure #phone fills height correctly using JS
+// Fix phone height on mobile — use visualViewport for accurate iOS Safari height
 function fixPhoneHeight() {
   if (window.innerWidth > 500) return;
   const phone = document.getElementById('phone');
   if (!phone) return;
-  if (isPWA) {
-    // PWA: fill full window height edge to edge
-    phone.style.height = window.innerHeight + 'px';
-  }
+  // visualViewport.height excludes the browser toolbar on iOS Safari
+  // window.innerHeight does NOT exclude it reliably
+  const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  phone.style.height = h + 'px';
 }
 
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fixPhoneHeight);
+}
 window.addEventListener('resize', fixPhoneHeight);
-// Run after DOM is ready
-document.addEventListener('DOMContentLoaded', fixPhoneHeight);
-setTimeout(fixPhoneHeight, 100);
+setTimeout(fixPhoneHeight, 50);
+setTimeout(fixPhoneHeight, 300); // second pass for iOS Safari late layout
 
 function shouldShowInstallBanner() {
   if (isPWA) return false;

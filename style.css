@@ -103,17 +103,6 @@ body {
     padding: 18px 14px 8px;
     padding-top: calc(18px + env(safe-area-inset-top));
   }
-
-  #bottom-nav {
-    padding-bottom: 10px;
-  }
-}
-
-/* is-browser class applied via JS when NOT running as PWA */
-@media (max-width: 500px) {
-  body.is-browser #bottom-nav {
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
-  }
 }
 
 @media (max-width: 420px) {
@@ -797,8 +786,10 @@ button {
   background: rgba(60, 92, 76, 0.4);
   backdrop-filter: blur(12px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 10px 18px 16px;
+  padding: 10px 18px 10px;
   position: relative;
+  /* Extend background into safe area on mobile */
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 
 .nav-btn {
