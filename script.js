@@ -3737,4 +3737,57 @@ if (screen.orientation && screen.orientation.lock) {
   screen.orientation.lock('portrait').catch(() => {});
 }
 
+// Show a quick loading screen when resuming the app after switching away
+function showResumeLoader() {
+  const phone = document.getElementById('phone');
+  if (!phone) return;
+
+  // Don't show if already showing loader or on auth/setup
+  if (document.getElementById('resume-loader')) return;
+
+  const loader = document.createElement('div');
+  loader.id = 'resume-loader';
+  loader.style.cssText = `
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  `;
+  loader.innerHTML = `
+    <div style="opacity:0.85;">${lotusSVG(60)}</div>
+    <div style="font-family:'Fraunces',serif;font-size:22px;font-style:italic;color:var(--cream);margin-top:12px;opacity:0.9;">Sprout</div>
+  `;
+  phone.appendChild(loader);
+  // Fade in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { loader.style.opacity = '1'; });
+  });
+}
+
+function hideResumeLoader() {
+  const loader = document.getElementById('resume-loader');
+  if (!loader) return;
+  loader.style.opacity = '0';
+  setTimeout(() => loader.remove(), 200);
+}
+
+// Listen for app coming back into focus
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // App going to background — nothing needed
+  } else {
+    // App coming back — show brief loader then hide
+    if (currentUser && state.setupComplete) {
+      showResumeLoader();
+      setTimeout(hideResumeLoader, 600);
+    }
+  }
+});
+
 initApp();
