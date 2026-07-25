@@ -788,7 +788,10 @@ button {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 10px 18px 10px;
   position: relative;
-  /* Extend background into safe area on mobile */
+}
+
+/* Only add safe area padding when in a browser (not installed PWA) */
+body.is-browser #bottom-nav {
   padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 
