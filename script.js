@@ -144,6 +144,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
 let saveTimeout = null;
+let authInitialized = false; // prevent double-fire on login
 
 async function saveState() {
   // Always save to localStorage as instant fallback, tagged with userId
@@ -3693,6 +3694,10 @@ async function initApp() {
     console.log('Auth event:', event, session?.user?.id);
 
     if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+      // Prevent double-loading — INITIAL_SESSION and SIGNED_IN can both fire on login
+      if (authInitialized && event === 'INITIAL_SESSION') return;
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') authInitialized = true;
+
       currentUser = session.user;
       await new Promise(r => setTimeout(r, 300));
       Object.assign(state, DEFAULT_STATE);
@@ -3700,7 +3705,6 @@ async function initApp() {
       if (!state.unlockedBadges) state.unlockedBadges = [];
 
       if (!state.setupComplete) {
-        // New user — pre-fill name then show setup
         if (pendingSignupName) {
           state.userName = pendingSignupName;
           pendingSignupName = '';
@@ -3711,18 +3715,20 @@ async function initApp() {
         state.screen = 'setup';
         state.setupStep = 1;
       } else {
-        // Returning user — go to splash
         state.screen = 'splash';
       }
 
+      // Hide resume loader if it was showing
+      hideResumeLoader();
       render();
       setTimeout(() => checkAchievements(), 2000);
       if (event === 'SIGNED_IN' && state.setupComplete) showToast('Welcome back! ☁️', 'success', 2500);
     } else if (event === 'INITIAL_SESSION' && !session) {
-      // No session — stay on auth screen
+      authInitialized = true;
       state.screen = 'auth';
       render();
     } else if (event === 'SIGNED_OUT') {
+      authInitialized = false;
       currentUser = null;
       localStorage.removeItem('sprout_data');
       Object.assign(state, DEFAULT_STATE);
@@ -3738,54 +3744,50 @@ if (screen.orientation && screen.orientation.lock) {
 }
 
 // Show a quick loading screen when resuming the app after switching away
+let resumeLoaderShown = false;
+
 function showResumeLoader() {
   const phone = document.getElementById('phone');
-  if (!phone) return;
-
-  // Don't show if already showing loader or on auth/setup
-  if (document.getElementById('resume-loader')) return;
+  if (!phone || document.getElementById('resume-loader')) return;
 
   const loader = document.createElement('div');
   loader.id = 'resume-loader';
   loader.style.cssText = `
-    position: absolute;
-    inset: 0;
+    position: absolute; inset: 0;
     background: var(--bg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
     z-index: 999;
-    opacity: 0;
-    transition: opacity 0.15s ease;
+    opacity: 1;
   `;
   loader.innerHTML = `
     <div style="opacity:0.85;">${lotusSVG(60)}</div>
     <div style="font-family:'Fraunces',serif;font-size:22px;font-style:italic;color:var(--cream);margin-top:12px;opacity:0.9;">Sprout</div>
   `;
   phone.appendChild(loader);
-  // Fade in
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => { loader.style.opacity = '1'; });
-  });
+  resumeLoaderShown = true;
 }
 
 function hideResumeLoader() {
   const loader = document.getElementById('resume-loader');
   if (!loader) return;
+  loader.style.transition = 'opacity 0.25s ease';
   loader.style.opacity = '0';
-  setTimeout(() => loader.remove(), 200);
+  setTimeout(() => { loader.remove(); resumeLoaderShown = false; }, 280);
 }
 
-// Listen for app coming back into focus
+// Show loader immediately when app goes to background
+// Remove it automatically once app comes back and data is ready
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    // App going to background — nothing needed
-  } else {
-    // App coming back — show brief loader then hide
+    // Going to background — show loader right away so it's there when they come back
     if (currentUser && state.setupComplete) {
       showResumeLoader();
-      setTimeout(hideResumeLoader, 600);
+    }
+  } else {
+    // Coming back — hide loader after a short moment for data to settle
+    if (resumeLoaderShown) {
+      setTimeout(hideResumeLoader, 400);
     }
   }
 });
