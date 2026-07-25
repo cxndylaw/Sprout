@@ -3643,11 +3643,10 @@ if (!isPWA) document.body.classList.add('is-browser');
 // Set phone height explicitly — works for both Safari browser and PWA
 function fixPhoneHeight() {
   if (window.innerWidth > 500) return;
-  const phone = document.getElementById('phone');
-  if (!phone) return;
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-  phone.style.height = h + 'px';
-  phone.style.minHeight = 'unset';
+  document.body.style.height = h + 'px';
+  const phone = document.getElementById('phone');
+  if (phone) { phone.style.height = h + 'px'; phone.style.minHeight = 'unset'; }
 }
 
 if (window.visualViewport) window.visualViewport.addEventListener('resize', fixPhoneHeight);
