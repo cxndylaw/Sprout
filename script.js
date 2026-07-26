@@ -225,16 +225,8 @@ function renderAuth() {
       <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Magic Link</div>
       <div style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;">We'll email you a sign-in link — no password needed.</div>
       <div class="auth-input">
-      <span class="auth-input-icon">
-          ${ICON.mail}
-      </span>
-
-      <input
-          type="email"
-          id="auth-email"
-          placeholder="Email address"
-          autocomplete="email"
-      >
+        <span class="auth-input-icon">${ICON.mail}</span>
+        <input type="email" id="auth-email" placeholder="Email address" autocomplete="email">
       </div>
       <button class="auth-btn" onclick="sendMagicLink()">Send Magic Link</button>
       <button class="auth-switch" onclick="authMode='login';render();">← Back to login</button>
@@ -346,26 +338,14 @@ async function signUp() {
 
 async function sendMagicLink() {
   const email = document.getElementById('auth-email')?.value?.trim();
-
-  if (!email) {
-    showToast('Please enter your email', 'error', 3000);
-    return;
-  }
-
+  if (!email) { showToast('Please enter your email', 'error', 3000); return; }
   showToast('Sending magic link...', 'info', 2000);
-
   const { error } = await db.auth.signInWithOtp({
     email,
-    options: {
-      emailRedirectTo: 'https://sprout.cindy.dev'
-    }
+    options: { emailRedirectTo: 'https://sprout.cindy.dev' }
   });
-
-  if (error) {
-    showToast(error.message, 'error', 4000);
-  } else {
-    showToast('Magic link sent! Check your inbox 📬', 'success', 5000);
-  }
+  if (error) { showToast(error.message, 'error', 4000); }
+  else { showToast('Magic link sent! Check your inbox 📬', 'success', 5000); }
 }
 
 async function signOut() {
@@ -407,6 +387,15 @@ function totals() {
   let income = 0, expense = 0;
   state.txns.forEach(t => t.type === 'income' ? income += t.amount : expense += t.amount);
   return { income, expense, net: income - expense, balance: state.startingBalance + income - expense };
+}
+
+function getBudgetForCat(cat) {
+  if (state.budgetMode === 'percentage' && !(state.budgetFixedOverrides || {})[cat]) {
+    const income = periodTotals().income || 0;
+    const pct = state.budgetsPercentage[cat] || 0;
+    return (income * pct) / 100;
+  }
+  return state.budgets[cat] || 0;
 }
 
 function spentByCat(cat) {
@@ -745,9 +734,7 @@ function renderCombinedAnalysis() {
     const goalsSaved = state.goals.reduce((s, g) => s + g.saved, 0);
 
     // Safe to spend = total budget allocation
-    const totalBudget = state.budgetMode === 'percentage'
-      ? Object.values(state.budgetsPercentage).reduce((s, p) => s + p, 0) / 100 * monthIncome
-      : Object.values(state.budgets).reduce((s, v) => s + v, 0);
+    const totalBudget = Object.keys(state.budgets).reduce((s, cat) => s + getBudgetForCat(cat), 0);
     const safeToSpend = Math.max(0, totalBudget - monthExpense);
     const dailySafe = daysLeft > 0 ? safeToSpend / daysLeft : 0;
 
@@ -1465,13 +1452,7 @@ function renderBudget() {
     });
     
     cardsHtml = `<div class="grid2">` + sortedCats.map(cat => {
-      let budget;
-      if (state.budgetMode === 'percentage' && !(state.budgetFixedOverrides || {})[cat]) {
-        const pct = state.budgetsPercentage[cat] || 0;
-        budget = (monthlyIncome * pct) / 100;
-      } else {
-        budget = state.budgets[cat];
-      }
+      const budget = getBudgetForCat(cat);
       
       const spent = spentByCat(cat);
       const remaining = budget - spent;
@@ -2598,7 +2579,7 @@ function renderAddTxn() {
 
   let budgetInfo = '';
   if (isExpense && f.cat) {
-    const budget = state.budgets[f.cat];
+    const budget = getBudgetForCat(f.cat);
     const spent = spentByCat(f.cat);
     if (budget) {
       const remaining = budget - spent;
@@ -3849,7 +3830,7 @@ function renderTxnDetail() {
     }).filter(Boolean) || [];
 
   // Budget info for expense
-  const budget = isExpense && tx.cat ? state.budgets[tx.cat] : null;
+  const budget = isExpense && tx.cat ? getBudgetForCat(tx.cat) : null;
   const spentInCat = isExpense && tx.cat ? state.txns.filter(t => {
     const now = new Date();
     const d = new Date(t.date + 'T00:00:00');
@@ -4112,3 +4093,17 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', fixP
 window.addEventListener('resize', fixPhoneHeight);
 setTimeout(fixPhoneHeight, 50);
 setTimeout(fixPhoneHeight, 400);
+
+// When keyboard opens, scroll focused input into view inside #screen-content
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    const focused = document.activeElement;
+    if (!focused || !['INPUT','TEXTAREA','SELECT'].includes(focused.tagName)) return;
+    const vvh = window.visualViewport.height;
+    const wh = window.innerHeight;
+    if (wh - vvh < 150) return; // keyboard not open
+    setTimeout(() => {
+      focused.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 100);
+  });
+}
