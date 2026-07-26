@@ -385,6 +385,23 @@ function fmt(n) {
   return (neg ? '-' : '') + s;
 }
 
+function fmtCompact(n) {
+  n = Number(n) || 0;
+  const neg = n < 0; n = Math.abs(n);
+  let s;
+  if (n >= 1000000) {
+    const v = n / 1000000;
+    s = (Number.isInteger(Math.round(v * 10) / 10) ? Math.round(v) : (Math.round(v * 10) / 10)) + 'M';
+  } else if (n >= 1000) {
+    const v = n / 1000;
+    const rounded = Math.round(v * 10) / 10;
+    s = (Number.isInteger(rounded) ? rounded : rounded.toFixed(1)) + 'K';
+  } else {
+    s = fmt(n);
+  }
+  return (neg ? '-' : '') + s;
+}
+
 /* ================= DERIVED ================= */
 function totals() {
   let income = 0, expense = 0;
@@ -727,9 +744,11 @@ function renderCombinedAnalysis() {
     const monthExpense = monthTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     const goalsSaved = state.goals.reduce((s, g) => s + g.saved, 0);
 
-    // Safe to spend = balance - goal savings - upcoming bills estimate
-    const t = totals();
-    const safeToSpend = Math.max(0, t.balance - goalsSaved);
+    // Safe to spend = total budget allocation
+    const totalBudget = state.budgetMode === 'percentage'
+      ? Object.values(state.budgetsPercentage).reduce((s, p) => s + p, 0) / 100 * monthIncome
+      : Object.values(state.budgets).reduce((s, v) => s + v, 0);
+    const safeToSpend = Math.max(0, totalBudget - monthExpense);
     const dailySafe = daysLeft > 0 ? safeToSpend / daysLeft : 0;
 
     // Weekly spending bars (last 5 weeks)
@@ -1447,7 +1466,7 @@ function renderBudget() {
     
     cardsHtml = `<div class="grid2">` + sortedCats.map(cat => {
       let budget;
-      if (state.budgetMode === 'percentage') {
+      if (state.budgetMode === 'percentage' && !(state.budgetFixedOverrides || {})[cat]) {
         const pct = state.budgetsPercentage[cat] || 0;
         budget = (monthlyIncome * pct) / 100;
       } else {
@@ -1461,8 +1480,8 @@ function renderBudget() {
       
       return `
       <div class="b-card" onclick="openEditBudget('${cat}')">
-        <div class="b-name">${cat}</div>
-        <button class="b-card-delete" onclick="deleteBudget('${cat}'); event.stopPropagation();">${ICON.trash}</button>
+        <div class="b-name">${cat}${state.budgetMode === 'percentage' && (state.budgetFixedOverrides||{})[cat] ? ' <span style="font-size:9px;opacity:0.7;">fixed</span>' : ''}</div>
+
         <div class="b-stats-row"><span>Budget:</span><span>Spent</span></div>
         <div class="b-stats-row" style="margin-top:-2px;">
           <span class="b-stats-val">${cur()}${fmt(budget)}</span>
@@ -1528,10 +1547,15 @@ function renderBudget() {
         <div class="b-name">${escapeHtml(g.name)}</div>
         <button class="b-card-delete" onclick="deleteGoal(${g.id}); event.stopPropagation();">${ICON.trash}</button>
         <div style="display:flex;justify-content:center;margin:6px 0;">${plant}</div>
-        <div class="b-stats-row"><span>Goal:</span><span>Saved</span></div>
-        <div class="b-stats-row" style="margin-top:-2px;">
-          <span class="b-stats-val">${cur()}${fmt(g.goal)}</span>
-          <span class="b-stats-val">${cur()}${fmt(g.saved)}</span>
+        <div style="display:flex;gap:4px;margin-top:2px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:10px;color:var(--cream-dim);">Goal</div>
+            <div class="b-stats-val" style="font-size:13px;white-space:nowrap;">${cur()}${fmtCompact(g.goal)}</div>
+          </div>
+          <div style="flex:1;min-width:0;text-align:right;">
+            <div style="font-size:10px;color:var(--cream-dim);">Saved</div>
+            <div class="b-stats-val" style="font-size:clamp(10px,3vw,13px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cur()}${fmt(g.saved)}</div>
+          </div>
         </div>
         <div class="b-remaining-label">Remaining:</div>
         <div class="b-remaining-val">${cur()}${fmt(remaining)}</div>
@@ -1586,15 +1610,41 @@ function closeEditBudget() {
   render();
 }
 
+function makeBudgetFixed(cat) {
+  // Convert this budget from percentage to a fixed dollar amount based on last month's income
+  const pt = periodTotals();
+  const income = pt.income || 0;
+  const pct = state.budgetsPercentage[cat] || 0;
+  const fixedAmt = Math.round((pct / 100) * income);
+  delete state.budgetsPercentage[cat];
+  state.budgets[cat] = fixedAmt;
+  state.showEditBudget = false;
+  state.editBudgetData = null;
+  showToast(`${cat} set to fixed ${cur()}${fmt(fixedAmt)}`, 'success', 2500);
+  saveState();
+  render();
+}
+
 function saveEditBudget() {
   const nameInput = document.getElementById('edit-budget-name');
-  const amountInput = document.getElementById('edit-budget-amount');
-  if (!nameInput || !amountInput) return;
+  if (!nameInput) return;
   
   const oldCat = state.editBudgetData.cat;
   const newName = nameInput.value.trim();
+  const modeOverride = document.getElementById('budget-mode-override')?.value;
+  const overrideFixed = modeOverride === 'fixed';
+  const isPercentage = state.budgetMode === 'percentage' && !overrideFixed;
+  // In fixed mode, there's no toggle element - always use edit-budget-amount-fixed
+  // In percentage mode with override, use edit-budget-amount-fixed
+  // In percentage mode without override, use edit-budget-amount-pct
+  let amountInput;
+  if (isPercentage) {
+    amountInput = document.getElementById('edit-budget-amount-pct');
+  } else {
+    amountInput = document.getElementById('edit-budget-amount-fixed');
+  }
+  if (!amountInput) return;
   const newAmount = parseFloat(amountInput.value);
-  const isPercentage = state.budgetMode === 'percentage';
   
   if (!newName || !newAmount || newAmount < 0) {
     showToast(`Please enter a valid name and ${isPercentage ? 'percentage' : 'amount'}`, 'error', 3000);
@@ -1645,6 +1695,10 @@ function saveEditBudget() {
       if (isPercentage) {
         state.budgetsPercentage[newName] = newAmount;
         delete state.budgetsPercentage[oldCat];
+      } else {
+        if (!state.budgetFixedOverrides) state.budgetFixedOverrides = {};
+        state.budgetFixedOverrides[newName] = true;
+        delete (state.budgetFixedOverrides || {})[oldCat];
       }
       // Delete old name
       delete state.budgets[oldCat];
@@ -1655,6 +1709,9 @@ function saveEditBudget() {
       if (isPercentage) {
         state.budgetsPercentage[oldCat] = newAmount;
       } else {
+        // Per-category fixed override in percentage mode
+        if (!state.budgetFixedOverrides) state.budgetFixedOverrides = {};
+        state.budgetFixedOverrides[oldCat] = true;
         state.budgets[oldCat] = newAmount;
       }
     }
@@ -1664,8 +1721,20 @@ function saveEditBudget() {
   state.showEditBudget = false;
   state.editBudgetData = null;
   state._budgetEdited = true;
+  saveState();
   render();
   setTimeout(() => checkAchievements(), 400);
+}
+
+function setBudgetEditMode(mode) {
+  document.getElementById('budget-mode-override').value = mode;
+  const isPct = mode === 'pct';
+  document.getElementById('pct-field').style.display = isPct ? '' : 'none';
+  document.getElementById('fixed-field').style.display = isPct ? 'none' : '';
+  document.getElementById('toggle-pct').style.background = isPct ? 'rgba(127,185,138,0.25)' : 'rgba(255,255,255,0.07)';
+  document.getElementById('toggle-pct').style.color = isPct ? 'var(--income)' : 'var(--cream-dim)';
+  document.getElementById('toggle-fixed').style.background = isPct ? 'rgba(255,255,255,0.07)' : 'rgba(220,154,90,0.25)';
+  document.getElementById('toggle-fixed').style.color = isPct ? 'var(--cream-dim)' : 'var(--orange)';
 }
 
 function renderEditBudgetModal() {
@@ -1676,23 +1745,37 @@ function renderEditBudgetModal() {
   const isPercentage = state.budgetMode === 'percentage';
   const pctValue = state.budgetsPercentage[data.cat] || 0;
   
+  // For percentage-mode budgets, allow overriding to fixed for this category
+  const overrideFixed = state._budgetEditOverride === data.cat;
+  const showAsFixed = !isPercentage || overrideFixed;
+
   return `
   <div class="modal-overlay">
     <div class="plain-modal">
-      <h3>${isNewBudget ? 'Add Budget' : 'Edit Budget'}</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h3 style="margin:0;">${isNewBudget ? 'Add Budget' : 'Edit Budget'}</h3>
+        ${!isNewBudget ? `<button onclick="deleteBudget('${data.cat}');closeEditBudget();" style="background:rgba(201,107,92,0.25);border:1px solid rgba(201,107,92,0.4);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#e2a99a;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></button>` : ''}
+      </div>
       <div class="field">
         <div class="field-label">Budget Name</div>
         <input type="text" id="edit-budget-name" value="${escapeHtml(data.name)}" placeholder="e.g. Shopping">
       </div>
-      <div class="field">
-        <div class="field-label">${isPercentage ? 'Percentage of Income' : 'Budget Amount'}</div>
-        ${isPercentage ? 
-          `<div style="display:flex;align-items:center;gap:8px;"><input type="number" id="edit-budget-amount" value="${pctValue}" placeholder="0" min="0" max="100" style="flex:1;"><span style="font-weight:600;">%</span></div>` :
-          `<div class="amount-wrap"><span>${cur()}</span><input type="number" id="edit-budget-amount" value="${data.amount}" placeholder="0.00"></div>`
-        }
+      ${isPercentage && !isNewBudget ? `
+      <div style="display:flex;gap:6px;margin-bottom:14px;">
+        <button id="toggle-pct" onclick="setBudgetEditMode('pct')" style="flex:1;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;cursor:pointer;background:rgba(127,185,138,0.25);color:var(--income);">% of Income</button>
+        <button id="toggle-fixed" onclick="setBudgetEditMode('fixed')" style="flex:1;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.07);color:var(--cream-dim);">Fixed ${cur()}</button>
+      </div>
+      <input type="hidden" id="budget-mode-override" value="pct">` : ''}
+      <div class="field" id="pct-field" style="${isPercentage ? '' : 'display:none;'}">
+        <div class="field-label">Percentage of Income</div>
+        <div style="display:flex;align-items:center;gap:8px;"><input type="number" id="edit-budget-amount-pct" value="${pctValue}" placeholder="0" min="0" max="100" style="flex:1;"><span style="font-weight:600;">%</span></div>
+      </div>
+      <div class="field" id="fixed-field" style="${!isPercentage ? '' : 'display:none;'}">
+        <div class="field-label">${isPercentage ? 'Fixed Amount' : 'Budget Amount'}</div>
+        <div class="amount-wrap"><span>${cur()}</span><input type="number" id="edit-budget-amount-fixed" value="${!isPercentage ? data.amount : ''}" placeholder="0.00"></div>
       </div>
       <div class="modal-btn-row">
-        <button class="cancel" onclick="closeEditBudget()">Cancel</button>
+        <button class="cancel" onclick="state._budgetEditOverride=null;closeEditBudget()">Cancel</button>
         <button class="confirm" onclick="saveEditBudget()">${isNewBudget ? 'Add' : 'Save'}</button>
       </div>
     </div>
@@ -2094,6 +2177,7 @@ function renderAccount() {
 
   <!-- Quick links -->
   <div class="card settings-list" style="margin-bottom:14px;">
+    <div class="s-row clickable" id="pwa-install-row" style="display:none;" onclick="triggerPWAInstall()"><span style="display:flex;align-items:center;gap:10px;"><span style="font-size:16px;">📲</span> Install as App</span>${ICON.chevron}</div>
     <div class="s-row clickable" onclick="goTo('subscriptions')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.subscription}</span> Subscriptions</span>${ICON.chevron}</div>
     <div class="s-row clickable" onclick="goTo('achievements')"><span style="display:flex;align-items:center;gap:10px;"><span style="display:flex;width:18px;height:18px;">${ICON.achievement}</span> Achievements</span>${ICON.chevron}</div>
   </div>
@@ -3901,11 +3985,36 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ================= APP INIT =================
+// PWA install prompt
+let _pwaPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  const row = document.getElementById('pwa-install-row');
+  if (row) row.style.display = 'flex';
+});
+window.addEventListener('appinstalled', () => {
+  _pwaPrompt = null;
+  const row = document.getElementById('pwa-install-row');
+  if (row) row.style.display = 'none';
+});
+async function triggerPWAInstall() {
+  if (!_pwaPrompt) { showToast('Open in Chrome/Edge to install', 'info', 3000); return; }
+  _pwaPrompt.prompt();
+  const { outcome } = await _pwaPrompt.userChoice;
+  if (outcome === 'accepted') showToast('App installed! 🎉', 'success', 2500);
+  _pwaPrompt = null;
+}
+
 async function initApp() {
   // Render auth screen first so DOM is ready
   state.screen = 'auth';
   render();
   showResumeLoader();
+
+  setTimeout(() => {
+    if (resumeLoaderShown) { hideResumeLoader(); if (state.screen === 'auth') render(); }
+  }, 5000);
 
   db.auth.onAuthStateChange(async (event, session) => {
     if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
@@ -3944,7 +4053,6 @@ async function initApp() {
       const lastActive = parseInt(localStorage.getItem('sprout_last_active') || '0');
       const hoursSince = (Date.now() - lastActive) / (1000 * 60 * 60);
       if (lastActive && hoursSince < 720) {
-        // Try refreshing the token — if it works, onAuthStateChange fires again with session
         const { error } = await db.auth.refreshSession();
         if (!error) return;
       }
@@ -3991,10 +4099,13 @@ if (!isPWA) document.body.classList.add('is-browser');
 // Set phone height explicitly — works for both Safari browser and PWA
 function fixPhoneHeight() {
   if (window.innerWidth > 500) return;
-  const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-  document.body.style.height = h + 'px';
+  // Don't resize when keyboard is open (viewport shrinks but window height stays)
+  const vvh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const wh = window.innerHeight;
+  if (wh - vvh > 150) return; // keyboard is open, skip resize
+  document.body.style.height = vvh + 'px';
   const phone = document.getElementById('phone');
-  if (phone) { phone.style.height = h + 'px'; phone.style.minHeight = 'unset'; }
+  if (phone) { phone.style.height = vvh + 'px'; phone.style.minHeight = 'unset'; }
 }
 
 if (window.visualViewport) window.visualViewport.addEventListener('resize', fixPhoneHeight);
