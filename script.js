@@ -3871,8 +3871,15 @@ function showResumeLoader() {
   loader.id = 'resume-loader';
   loader.style.cssText = `position:fixed;inset:0;background:var(--bg, #182922);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;`;
   loader.innerHTML = `
-    <div style="opacity:0.85;">${lotusSVG(70)}</div>
-    <div style="font-family:'Fraunces',serif;font-size:24px;font-style:italic;color:rgba(255,255,255,0.9);margin-top:14px;">Sprout</div>`;
+    <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes lpulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}</style>
+    <div style="position:relative;width:80px;height:80px;margin-bottom:16px;">
+      <svg viewBox="0 0 80 80" width="80" height="80" style="animation:spin 1.2s linear infinite;position:absolute;inset:0;">
+        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(127,185,138,0.2)" stroke-width="5"/>
+        <circle cx="40" cy="40" r="34" fill="none" stroke="#7fb98a" stroke-width="5" stroke-dasharray="60 154" stroke-linecap="round"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;animation:lpulse 1.2s ease-in-out infinite;">${lotusSVG(40)}</div>
+    </div>
+    <div style="font-family:'Fraunces',serif;font-size:24px;font-style:italic;color:rgba(255,255,255,0.9);">Sprout</div>`;
   document.body.appendChild(loader);
   resumeLoaderShown = true;
 }
@@ -3880,9 +3887,9 @@ function showResumeLoader() {
 function hideResumeLoader() {
   const loader = document.getElementById('resume-loader');
   if (!loader) return;
-  loader.style.transition = 'opacity 0.25s ease';
+  loader.style.transition = 'opacity 0.15s ease';
   loader.style.opacity = '0';
-  setTimeout(() => { loader.remove(); resumeLoaderShown = false; }, 280);
+  setTimeout(() => { loader.remove(); resumeLoaderShown = false; }, 160);
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -3934,13 +3941,12 @@ async function initApp() {
 
     } else if (event === 'INITIAL_SESSION' && !session) {
       authInitialized = true;
-      // Check if user was recently active — if so, try token refresh before showing auth
       const lastActive = parseInt(localStorage.getItem('sprout_last_active') || '0');
       const hoursSince = (Date.now() - lastActive) / (1000 * 60 * 60);
-      if (lastActive && hoursSince < 720) { // 30 days
-        // Try to restore session silently
-        const { data } = await db.auth.getSession();
-        if (data?.session) return; // onAuthStateChange will fire again with session
+      if (lastActive && hoursSince < 720) {
+        // Try refreshing the token — if it works, onAuthStateChange fires again with session
+        const { error } = await db.auth.refreshSession();
+        if (!error) return;
       }
       hideResumeLoader();
       state.screen = 'auth';
