@@ -4578,7 +4578,13 @@ function undoImport() {
 
 /* ================= REVIEW TRANSACTIONS ================= */
 function getUnreviewedTransactions() {
-  return state.txns.filter(t => t.isAutoAdded && !t.reviewed);
+  return state.txns.filter(t => {
+    // Include transactions that are auto-added AND either:
+    // 1. Don't have reviewed field (backward compat with old imports)
+    // 2. Have reviewed: false
+    if (!t.isAutoAdded) return false;
+    return t.reviewed === undefined || t.reviewed === false;
+  });
 }
 
 function startReviewMode() {

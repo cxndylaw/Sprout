@@ -119,7 +119,13 @@ if (document.body.classList.contains('desktop-mode')) {
 
   // ================= REVIEW TRANSACTIONS ================= 
   window.getUnreviewedTransactions = function() {
-    return window.state.txns.filter(t => t.isAutoAdded && !t.reviewed);
+    return window.state.txns.filter(t => {
+      // Include transactions that are auto-added AND either:
+      // 1. Don't have reviewed field (backward compat with old imports)
+      // 2. Have reviewed: false
+      if (!t.isAutoAdded) return false;
+      return t.reviewed === undefined || t.reviewed === false;
+    });
   };
 
   window.startReviewMode = function() {
@@ -299,10 +305,14 @@ if (document.body.classList.contains('desktop-mode')) {
         const phoneFrame = document.getElementById('phone');
         const desktopModalContainer = document.getElementById('modal-container');
         
+        // Only overwrite desktop modals if there's a modal in the phone frame
+        // This preserves custom modals like the upload modal
         if (phoneFrame && desktopModalContainer && phoneFrame.querySelector('#modal-container')) {
           const phoneModalContainer = phoneFrame.querySelector('#modal-container');
-          desktopModalContainer.innerHTML = phoneModalContainer.innerHTML;
-          desktopModalContainer.style.display = phoneModalContainer.innerHTML ? 'block' : 'none';
+          // Only update if phone has modals to avoid clearing custom desktop modals
+          if (phoneModalContainer.innerHTML.trim()) {
+            desktopModalContainer.innerHTML = phoneModalContainer.innerHTML;
+          }
         }
         
         // Hide phone frame but keep it in DOM for script.js
@@ -312,11 +322,14 @@ if (document.body.classList.contains('desktop-mode')) {
         const bottomNav = document.getElementById('bottom-nav-wrap');
         if (bottomNav) bottomNav.style.display = 'none';
         
-        // Lock scroll on main-content when modal is open
+        // Lock scroll on main-content and ensure modal container visibility
         const mainContent = document.getElementById('main-content');
-        const hasModal = desktopModalContainer && desktopModalContainer.innerHTML;
+        const hasModal = desktopModalContainer && desktopModalContainer.innerHTML.trim();
         if (mainContent) {
           mainContent.style.overflow = hasModal ? 'hidden' : 'auto';
+        }
+        if (desktopModalContainer) {
+          desktopModalContainer.style.display = hasModal ? 'block' : 'none';
         }
         
         // Render sidebar
