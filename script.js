@@ -1153,8 +1153,10 @@ function getBankPeriodTransactions() {
   
   if (state.bankPeriod === 'thisMonth') {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     const startDate = startOfMonth.toISOString().split('T')[0];
-    return state.txns.filter(t => t.date >= startDate);
+    const endDate = endOfMonth.toISOString().split('T')[0];
+    return state.txns.filter(t => t.date >= startDate && t.date <= endDate);
   } else if (state.bankPeriod === 'lastMonth') {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth(), 0);
@@ -3895,6 +3897,64 @@ function cancelTxnEdit() {
   render();
 }
 
+function quickPickCategory(txnId) {
+  const tx = state.txns.find(t => t.id === txnId);
+  if (!tx) return;
+  
+  // Get all unique categories
+  const allCats = [...new Set([...Object.keys(state.budgets), 'Other'])];
+  
+  // Create modal
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  `;
+  
+  const categoryButtons = allCats.map(cat => {
+    const bgColor = tx.cat === cat ? 'var(--orange)' : 'var(--bg)';
+    const borderColor = tx.cat === cat ? 'var(--orange)' : 'rgba(255,255,255,0.12)';
+    return `<button onclick="changeQuickCategory(${txnId}, '${cat}')" style="padding: 10px; background: ${bgColor}; border: 1px solid ${borderColor}; color: var(--cream); border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">${cat}</button>`;
+  }).join('');
+  
+  modal.innerHTML = `
+    <div style="background: var(--card); border-radius: 12px; padding: 20px; max-width: 300px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+      <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 700;">Pick Category</h3>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        ${categoryButtons}
+      </div>
+    </div>
+  `;
+  
+  modal.onclick = (e) => {
+    if (e.target === modal) modal.remove();
+  };
+  
+  document.body.appendChild(modal);
+}
+
+function changeQuickCategory(txnId, category) {
+  const tx = state.txns.find(t => t.id === txnId);
+  if (!tx) return;
+  
+  tx.cat = category;
+  saveState();
+  showToast(`Category changed to ${category}`, 'success', 2000);
+  
+  // Close modal and refresh
+  document.querySelector('div[style*="position: fixed"]')?.remove();
+  render();
+}
+
+/* ================= TRANSACTION DETAIL ================= */
 function renderTxnDetail() {
   const tx = state.txns.find(t => t.id === state.selectedTxnId);
   if (!tx) { goTo('bank'); return ''; }
@@ -3975,10 +4035,11 @@ function renderTxnDetail() {
         <span style="font-size:13px;color:var(--cream-dim);">Type</span>
         <span style="font-size:13px;font-weight:600;color:${isExpense ? 'var(--expense)' : 'var(--income)'};">${isExpense ? 'Expense' : 'Income'}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);${tx.isAutoAdded ? 'cursor:pointer;' : ''}">
         <span style="font-size:13px;color:var(--cream-dim);">Category</span>
-        <span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
+        <span style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;${tx.isAutoAdded ? 'background:rgba(255,255,255,0.08);padding:6px 10px;border-radius:6px;' : ''}" ${tx.isAutoAdded ? `onclick="quickPickCategory(${tx.id})"` : ''}>
           <span style="color:${color};">${ICON[iconKey]}</span>${tx.cat || 'Uncategorised'}
+          ${tx.isAutoAdded ? `<span style="font-size:11px;color:var(--cream-dim);margin-left:4px;">tap to change</span>` : ''}
         </span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);">
@@ -4299,10 +4360,16 @@ function showMobileUploadTransactionsModal() {
         type = transaction.type || 'expense';
       }
 
+      // Determine category for preview
+      let previewCategory = category;
+      if (previewCategory === 'Other' || !previewCategory) {
+        previewCategory = categorizeTransaction(cleanWestpacDesc(desc), type);
+      }
+      
       preview.innerHTML += `
         <div style="padding: 6px; border-bottom: 1px solid var(--stripe);">
           <div style="color: var(--cream); font-weight: 500;">${cleanWestpacDesc(desc)}</div>
-          <div style="color: var(--cream-dim); font-size: 11px;">${date} • ${category}</div>
+          <div style="color: var(--cream-dim); font-size: 11px;">${date} • ${previewCategory}</div>
           <div style="color: ${type === 'income' ? 'var(--income)' : 'var(--expense)'}; font-size: 11px; font-weight: 600;">${type === 'income' ? '+' : '-'}${amount.toFixed(2)}</div>
         </div>
       `;
@@ -4389,6 +4456,11 @@ window.confirmMobileImportTransactions = async function() {
       // Clean up description - remove quotes, prefixes, and extra whitespace
       let cleanDesc = cleanWestpacDesc(desc);
       
+      // Use smart categorization if no category detected
+      if (category === 'Other' || !category) {
+        category = categorizeTransaction(cleanDesc, type);
+      }
+      
       const newTx = {
         id: Date.now() + i,
         date: formattedDate,
@@ -4435,6 +4507,48 @@ function cleanWestpacDesc(desc) {
   cleaned = cleaned.replace(/^DEPOSIT-OSKO\s+PAYMENT\s+\d+\s+/i, '').trim();
   
   return cleaned;
+}
+
+/* ================= SMART LOCAL CATEGORIZER ================= */
+function categorizeTransaction(description, transactionType) {
+  if (!description) return 'Other';
+  
+  const desc = description.toUpperCase();
+  
+  if (transactionType === 'income') {
+    // Income categorization
+    if (desc.includes('SALARY') || desc.includes('PAY')) return 'Salary';
+    if (desc.includes('FREELANCE') || desc.includes('INVOICE')) return 'Freelance';
+    if (desc.includes('REFUND') || desc.includes('RETURN')) return 'Refund';
+    if (desc.includes('GIFT') || desc.includes('TRANSFER')) return 'Reimburse';
+    return 'Other';
+  }
+  
+  // Expense categorization
+  
+  // Shopping
+  if (desc.match(/IKEA|BUNNINGS|KMART|TARGET|MYER|DFO|SHOPPING|RETAIL|MALL|SHOP/)) return 'Shopping';
+  
+  // Groceries
+  if (desc.match(/WOOLWORTHS|COLES|ALDI|IGA|SAFEWAY|SUPERMARKET|GROCERY|FRESH|PRODUCE/)) return 'Groceries';
+  
+  // Eating Out
+  if (desc.match(/CAFE|RESTAURANT|PIZZA|MCDONALD|KFC|SUBWAY|BURGER|COFFEE|DINING|FOOD|UBER EATS|MENULOG|DOORDASH|CAFE|BISTRO|GRILL|PUB|BAR|TAKEAWAY/)) return 'Eating Out';
+  
+  // Health
+  if (desc.match(/DOCTOR|PHARMACY|MEDICAL|DENTIST|HEALTH|HOSPITAL|CLINIC|CHEMIST|GP|PATHOLOGY|OPTICAL/)) return 'Health';
+  
+  // Transport
+  if (desc.match(/FUEL|PETROL|SHELL|CALTEX|BP|WOOLWORTHS FUEL|UBER|TAXI|PARKING|TOLLS|UBER|TRAIN|BUS|TRANSPORT|AIRBNB|HOTEL|ACCOMMODATION|CAR PARK/)) return 'Transport';
+  
+  // Gifts
+  if (desc.match(/GIFT|FLOWERS|FLORIST|PRESENT|BIRTHDAY/)) return 'Gifts';
+  
+  // Subscription
+  if (desc.match(/SPOTIFY|NETFLIX|DISNEY|AMAZON|ADOBE|MICROSOFT|SUBSCRIPTION|MONTHLY|PREMIUM|MEMBERSHIP|PATREON|APPLE|ICLOUD|DROPBOX/)) return 'Subscription';
+  
+  // Default
+  return 'Misc';
 }
 
 /* ================= IMPORT UNDO ================= */

@@ -20,6 +20,103 @@ if (document.body.classList.contains('desktop-mode')) {
     return cleaned;
   }
 
+  // ================= SMART LOCAL CATEGORIZER ================= 
+  function categorizeTransaction(description, transactionType) {
+    if (!description) return 'Other';
+    
+    const desc = description.toUpperCase();
+    
+    if (transactionType === 'income') {
+      // Income categorization
+      if (desc.includes('SALARY') || desc.includes('PAY')) return 'Salary';
+      if (desc.includes('FREELANCE') || desc.includes('INVOICE')) return 'Freelance';
+      if (desc.includes('REFUND') || desc.includes('RETURN')) return 'Refund';
+      if (desc.includes('GIFT') || desc.includes('TRANSFER')) return 'Reimburse';
+      return 'Other';
+    }
+    
+    // Expense categorization
+    
+    // Shopping
+    if (desc.match(/IKEA|BUNNINGS|KMART|TARGET|MYER|DFO|SHOPPING|RETAIL|MALL|SHOP/)) return 'Shopping';
+    
+    // Groceries
+    if (desc.match(/WOOLWORTHS|COLES|ALDI|IGA|SAFEWAY|SUPERMARKET|GROCERY|FRESH|PRODUCE/)) return 'Groceries';
+    
+    // Eating Out
+    if (desc.match(/CAFE|RESTAURANT|PIZZA|MCDONALD|KFC|SUBWAY|BURGER|COFFEE|DINING|FOOD|UBER EATS|MENULOG|DOORDASH|CAFE|BISTRO|GRILL|PUB|BAR|TAKEAWAY/)) return 'Eating Out';
+    
+    // Health
+    if (desc.match(/DOCTOR|PHARMACY|MEDICAL|DENTIST|HEALTH|HOSPITAL|CLINIC|CHEMIST|GP|PATHOLOGY|OPTICAL/)) return 'Health';
+    
+    // Transport
+    if (desc.match(/FUEL|PETROL|SHELL|CALTEX|BP|WOOLWORTHS FUEL|UBER|TAXI|PARKING|TOLLS|UBER|TRAIN|BUS|TRANSPORT|AIRBNB|HOTEL|ACCOMMODATION|CAR PARK/)) return 'Transport';
+    
+    // Gifts
+    if (desc.match(/GIFT|FLOWERS|FLORIST|PRESENT|BIRTHDAY/)) return 'Gifts';
+    
+    // Subscription
+    if (desc.match(/SPOTIFY|NETFLIX|DISNEY|AMAZON|ADOBE|MICROSOFT|SUBSCRIPTION|MONTHLY|PREMIUM|MEMBERSHIP|PATREON|APPLE|ICLOUD|DROPBOX/)) return 'Subscription';
+    
+    // Default
+    return 'Misc';
+  }
+
+  // ================= QUICK CATEGORY PICKER ================= 
+  window.quickPickCategory = function(txnId) {
+    const tx = window.state.txns.find(t => t.id === txnId);
+    if (!tx) return;
+    
+    const allCats = [...new Set([...Object.keys(window.state.budgets), 'Other'])];
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    `;
+    
+    const categoryButtons = allCats.map(cat => {
+      const bgColor = tx.cat === cat ? 'var(--orange)' : 'var(--bg)';
+      const borderColor = tx.cat === cat ? 'var(--orange)' : 'rgba(255,255,255,0.12)';
+      return `<button onclick="window.changeQuickCategory(${txnId}, '${cat}')" style="padding: 10px; background: ${bgColor}; border: 1px solid ${borderColor}; color: var(--cream); border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">${cat}</button>`;
+    }).join('');
+    
+    modal.innerHTML = `
+      <div style="background: var(--card); border-radius: 12px; padding: 20px; max-width: 400px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+        <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 700;">Pick Category</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          ${categoryButtons}
+        </div>
+      </div>
+    `;
+    
+    modal.onclick = (e) => {
+      if (e.target === modal) modal.remove();
+    };
+    
+    document.body.appendChild(modal);
+  };
+
+  window.changeQuickCategory = function(txnId, category) {
+    const tx = window.state.txns.find(t => t.id === txnId);
+    if (!tx) return;
+    
+    tx.cat = category;
+    window.saveState();
+    window.showToast(`Category changed to ${category}`, 'success', 2000);
+    
+    document.querySelector('div[style*="position: fixed"]')?.remove();
+    window.render();
+  };
+
   // ================= SIDEBAR NAVIGATION ================= 
   function renderDesktopNav() {
     if (!window.state || !window.ICON) return;
@@ -293,6 +390,11 @@ if (document.body.classList.contains('desktop-mode')) {
         
         // Clean up description - remove quotes, prefixes, and extra whitespace
         let cleanDesc = cleanWestpacDesc(desc);
+        
+        // Use smart categorization if no category detected
+        if (category === 'Other' || !category) {
+          category = categorizeTransaction(cleanDesc, type);
+        }
         
         const newTx = {
           id: Date.now() + i,
