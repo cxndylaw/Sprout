@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#182922">
+  <title>Sprout 发芽 — Budget Tracker</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="desktop-style.css">
+  <style>
+    /* Hide mobile phone frame on desktop */
+    #phone {
+      display: none !important;
+    }
+    
+    /* Ensure desktop container is visible */
+    #desktop-container {
+      display: flex !important;
+    }
+  </style>
+</head>
+<body class="desktop-mode">
+  <div id="desktop-container" class="hide-sidebar">
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div id="app-logo-container" class="app-logo"></div>
+        <div class="app-title">Budget Tracker</div>
+      </div>
+      <nav id="sidebar-nav"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content">
+      <div id="screen-content"></div>
+    </main>
+
+    <!-- Modal Container -->
+    <div id="modal-container"></div>
+  </div>
+
+  <!-- Hidden phone frame (needed for script.js compatibility) -->
+  <div id="phone" style="display: none;">
+    <div id="screen-content-mobile"></div>
+    <div id="bottom-nav-wrap"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js?v=33"></script>
+  <script src="desktop-script.js?v=33"></script>
+</body>
+</html>

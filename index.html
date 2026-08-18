@@ -6,17 +6,25 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#182922">
-  <meta name="screen-orientation" content="portrait">
   <title>Sprout 发芽 — Budget Tracker</title>
-  <link rel="stylesheet" href="style.css">
+  <script>
+    // Detect if mobile and redirect to appropriate version
+    const isMobile = window.innerWidth <= 900 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isPortrait = window.innerHeight > window.innerWidth;
+    
+    if (isMobile && isPortrait) {
+      // Mobile portrait - use mobile version
+      window.location.href = 'mobile.html';
+    } else {
+      // Desktop or landscape - use desktop version
+      window.location.href = 'desktop.html';
+    }
+  </script>
 </head>
-<body>
-  <div id="phone">
-    <div id="screen-content"></div>
-    <div id="bottom-nav-wrap"></div>
+<body style="margin:0;padding:0;background:#182922;display:flex;align-items:center;justify-content:center;height:100vh;font-family:Poppins,sans-serif;color:#f3ede1;">
+  <div style="text-align:center;">
+    <div style="font-size:48px;margin-bottom:20px;">🌱</div>
+    <p>Loading Sprout...</p>
   </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=28"></script>
 </body>
 </html>

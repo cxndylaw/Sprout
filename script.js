@@ -96,6 +96,11 @@ const EXPENSE_CATS_PRIMARY = ['Shopping', 'Groceries', 'Eating Out', 'Health', '
 const EXPENSE_CATS_MORE = ['Gifts', 'Misc'];
 const INCOME_CATS = ['Salary', 'Freelance', 'Gift', 'Refund', 'Reimburse', 'Other'];
 
+// Expose to global scope for desktop version
+window.EXPENSE_CATS_PRIMARY = EXPENSE_CATS_PRIMARY;
+window.EXPENSE_CATS_MORE = EXPENSE_CATS_MORE;
+window.INCOME_CATS = INCOME_CATS;
+
 function daysAgo(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -154,6 +159,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
+let authInitialized = false;
 let saveTimeout = null;
 
 async function saveState() {
@@ -617,6 +623,43 @@ function renderHome() {
       <div class="brand">Sprout</div>
       <div class="brand-cn">发芽</div>
     </div>
+  </div>
+
+  <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+    <button onclick="openAddTxn('expense')" style="
+      padding: 8px 14px;
+      background: linear-gradient(135deg, rgba(193, 125, 63, 0.7), rgba(220, 154, 90, 0.7));
+      border: 1px solid rgba(220, 154, 90, 0.3);
+      border-radius: 8px;
+      color: var(--cream);
+      font-weight: 500;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.2s;
+    " onmouseover="this.style.background='linear-gradient(135deg, rgba(193, 125, 63, 0.9), rgba(220, 154, 90, 0.9))'" onmouseout="this.style.background='linear-gradient(135deg, rgba(193, 125, 63, 0.7), rgba(220, 154, 90, 0.7))'">
+      ${ICON.arrowDown} Expense
+    </button>
+    <button onclick="openAddTxn('income')" style="
+      padding: 8px 14px;
+      background: linear-gradient(135deg, rgba(127, 185, 138, 0.7), rgba(127, 185, 138, 0.9));
+      border: 1px solid rgba(127, 185, 138, 0.3);
+      border-radius: 8px;
+      color: var(--cream);
+      font-weight: 500;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.2s;
+    " onmouseover="this.style.background='linear-gradient(135deg, rgba(127, 185, 138, 0.9), rgba(127, 185, 138, 1))'" onmouseout="this.style.background='linear-gradient(135deg, rgba(127, 185, 138, 0.7), rgba(127, 185, 138, 0.9))'">
+      ${ICON.arrowUp} Income
+    </button>
   </div>
 
   <div class="summary-card">
@@ -4066,6 +4109,18 @@ function startSupabasePing() {
 if (screen.orientation && screen.orientation.lock) {
   screen.orientation.lock('portrait').catch(() => {});
 }
+
+// Expose key functions and variables to window for desktop version compatibility
+window.state = state;
+window.render = render;
+window.saveState = saveState;
+window.showToast = showToast;
+window.cur = cur;
+window.ICON = ICON;
+window.CAT_ICON = CAT_ICON;
+window.CAT_COLOR = CAT_COLOR;
+window.CURRENCIES = CURRENCIES;
+window.CURRENCY_SYMBOL = CURRENCY_SYMBOL;
 
 initApp();
 /* ===== BROWSER vs PWA DETECTION ===== */
