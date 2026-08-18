@@ -1,31 +1,30 @@
 /* ================= DESKTOP-SPECIFIC FUNCTIONALITY ================= */
 
-// Detect if running on desktop
-const isDesktopMode = document.body.classList.contains('desktop-mode');
-
-if (isDesktopMode) {
+// Only run on desktop mode
+if (document.body.classList.contains('desktop-mode')) {
   // ================= SIDEBAR NAVIGATION ================= 
   function renderDesktopNav() {
+    if (!window.state || !window.ICON) return;
+    
     const nav = document.getElementById('sidebar-nav');
     const sidebar = document.getElementById('sidebar');
     if (!nav) return;
 
     // Hide sidebar on auth screens
-    const isAuthScreen = state.screen === 'auth' || state.screen === 'splash' || state.screen === 'setup';
-    sidebar.style.display = isAuthScreen ? 'none' : 'flex';
+    const isAuthScreen = window.state.screen === 'auth' || window.state.screen === 'splash' || window.state.screen === 'setup';
+    if (sidebar) sidebar.style.display = isAuthScreen ? 'none' : 'flex';
 
     const navItems = [
       { id: 'home', label: 'Dashboard', icon: 'home' },
-      { id: 'budgets', label: 'Budgets', icon: 'budget' },
-      { id: 'transactions', label: 'Transactions', icon: 'bank' },
+      { id: 'budget', label: 'Budgets', icon: 'budget' },
+      { id: 'bank', label: 'Transactions', icon: 'bank' },
       { id: 'upload', label: 'Import Transactions', icon: 'arrowUp' },
       { id: 'history', label: 'Budget History', icon: 'calendar' },
-      { id: 'settings', label: 'Settings', icon: 'sliders' },
       { id: 'account', label: 'Account', icon: 'account' },
     ];
 
     nav.innerHTML = navItems.map(item => `
-      <div class="nav-item ${state.screen === item.id ? 'active' : ''}" data-screen="${item.id}">
+      <div class="nav-item ${window.state.screen === item.id ? 'active' : ''}" data-screen="${item.id}">
         ${window.ICON[item.icon] || ''}
         <span>${item.label}</span>
       </div>
@@ -35,45 +34,44 @@ if (isDesktopMode) {
     document.querySelectorAll('.nav-item').forEach(item => {
       item.addEventListener('click', () => {
         const screen = item.dataset.screen;
-        state.screen = screen;
+        window.state.screen = screen;
         
         if (screen === 'upload') {
           showUploadTransactionsModal();
         } else if (screen === 'history') {
           showBudgetHistory();
         } else {
-          render();
+          window.render();
         }
       });
     });
   }
 
-  // Wait for script.js to load and expose render
-  setTimeout(() => {
-    if (!window.render) return;
-    
-    const originalRender = window.render;
-    
-    // Override render function
-    window.render = function() {
-      // Hide mobile elements
-      const bottomNav = document.getElementById('bottom-nav-wrap');
-      if (bottomNav) bottomNav.style.display = 'none';
-      const phoneFrame = document.getElementById('phone');
-      if (phoneFrame) phoneFrame.style.display = 'none';
+  // Wait for script.js to fully load
+  let initAttempts = 0;
+  const waitForInit = setInterval(() => {
+    if (window.state && window.render && window.ICON) {
+      clearInterval(waitForInit);
       
-      // Call original render (goes to #screen-content)
-      if (originalRender) originalRender.call(this);
-      
-      // Render desktop sidebar
-      renderDesktopNav();
-    };
-    
-    // Set up logo in sidebar
-    setTimeout(() => {
+      // Override render to add sidebar
+      const originalRender = window.render;
+      window.render = function() {
+        // Hide mobile elements
+        const bottomNav = document.getElementById('bottom-nav-wrap');
+        if (bottomNav) bottomNav.style.display = 'none';
+        const phoneFrame = document.getElementById('phone');
+        if (phoneFrame) phoneFrame.style.display = 'none';
+        
+        // Call original render
+        originalRender.call(this);
+        
+        // Render sidebar
+        renderDesktopNav();
+      };
+
+      // Set up logo
       const logoContainer = document.getElementById('app-logo-container');
-      if (logoContainer && !logoContainer.innerHTML) {
-        // Use the same lotus SVG as the app
+      if (logoContainer) {
         logoContainer.innerHTML = `<svg width="50" height="50" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.4" style="color: var(--orange);">
           <path d="M50 62 C40 50 40 30 50 18 C60 30 60 50 50 62Z"/>
           <path d="M50 62 C34 55 22 40 20 26 C36 26 48 40 50 62Z"/>
@@ -85,12 +83,14 @@ if (isDesktopMode) {
           <ellipse cx="50" cy="88" rx="26" ry="4"/>
         </svg>`;
       }
-    }, 100);
-    
-    // Initial render call
-    originalRender.call(window);
-    renderDesktopNav();
-  }, 500);
+
+      // Initial render with sidebar
+      renderDesktopNav();
+    } else if (initAttempts++ > 100) {
+      clearInterval(waitForInit);
+      console.warn('Desktop mode init timeout');
+    }
+  }, 50);
 
   // ================= TRANSACTION UPLOAD ================= 
   window.showUploadTransactionsModal = function() {
@@ -126,7 +126,7 @@ if (isDesktopMode) {
         </div>
 
         <div style="display: flex; gap: 12px;">
-          <button onclick="this.closest('.modal-backdrop').remove(); state.screen='home'; render();" style="
+          <button onclick="this.closest('.modal-backdrop').remove(); window.state.screen='home'; window.render();" style="
             flex: 1;
             padding: 12px;
             background: var(--card);
@@ -161,8 +161,6 @@ if (isDesktopMode) {
     document.getElementById('modal-container').appendChild(modal);
     
     const fileInput = document.getElementById('csv-upload');
-    let pendingTransactions = [];
-
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -171,7 +169,6 @@ if (isDesktopMode) {
       const lines = text.split('\n').filter(line => line.trim());
       const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
       
-      pendingTransactions = [];
       const preview = document.getElementById('preview-list');
       preview.innerHTML = '';
 
@@ -184,16 +181,6 @@ if (isDesktopMode) {
         });
 
         if (transaction.date && transaction.amount) {
-          pendingTransactions.push({
-            date: transaction.date,
-            desc: transaction.description || 'Imported Transaction',
-            amount: parseFloat(transaction.amount) || 0,
-            cat: transaction.category || 'Other',
-            type: (transaction.type || 'expense').toLowerCase(),
-            isAutoAdded: true,
-            source: 'csv-import'
-          });
-
           preview.innerHTML += `
             <div style="padding: 8px; border-bottom: 1px solid var(--stripe); display: flex; justify-content: space-between;">
               <div>
@@ -208,7 +195,7 @@ if (isDesktopMode) {
         }
       }
 
-      if (pendingTransactions.length > 0) {
+      if (lines.length > 1) {
         document.getElementById('upload-preview').style.display = 'block';
         const btn = document.getElementById('import-btn');
         btn.style.opacity = '1';
@@ -235,50 +222,102 @@ if (isDesktopMode) {
         transaction[header] = values[idx] || '';
       });
 
-      if (transaction.date && transaction.amount) {
+      // Support both Westpac and generic formats
+      let date, desc, amount, category, type;
+      
+      if (transaction.date && (transaction['debit amount'] || transaction['credit amount'])) {
+        // Westpac format
+        date = transaction.date;
+        desc = transaction.narrative || 'Transaction';
+        
+        // Skip TFR Westpac (internal transfers)
+        if (desc.toUpperCase().includes('TFR') || desc.toUpperCase().includes('TRANSFER')) {
+          continue;
+        }
+        
+        category = 'Other'; // Ignore Categories column - user will categorize after import
+        
+        const debit = parseFloat(transaction['debit amount']) || 0;
+        const credit = parseFloat(transaction['credit amount']) || 0;
+        
+        if (debit > 0) {
+          amount = debit;
+          type = 'expense';
+        } else if (credit > 0) {
+          amount = credit;
+          type = 'income';
+        } else {
+          continue; // Skip if no amount
+        }
+      } else {
+        // Generic format fallback
+        date = transaction.date;
+        desc = transaction.description || 'Imported Transaction';
+        amount = Math.abs(parseFloat(transaction.amount) || 0);
+        category = transaction.category || 'Other';
+        type = (transaction.type || 'expense').toLowerCase();
+      }
+
+      if (date && amount > 0) {
+        // Parse date from DD/MM/YYYY to YYYY-MM-DD
+        let formattedDate = date;
+        if (date && date.includes('/')) {
+          const parts = date.split('/');
+          if (parts.length === 3) {
+            // Handle DD/MM/YYYY or MM/DD/YYYY format
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            const year = parts[2];
+            formattedDate = `${year}-${month}-${day}`;
+          }
+        }
+        
+        // Clean up description - remove quotes and extra whitespace
+        let cleanDesc = desc.replace(/^["']|["']$/g, '').trim();
+        
         const newTx = {
           id: Date.now() + i,
-          date: transaction.date,
-          desc: transaction.description || 'Imported Transaction',
-          amount: Math.abs(parseFloat(transaction.amount) || 0),
-          cat: transaction.category || 'Other',
-          type: (transaction.type || 'expense').toLowerCase(),
+          date: formattedDate,
+          desc: cleanDesc,
+          amount: amount,
+          cat: category,
+          type: type,
           isAutoAdded: true,
           source: 'csv-import'
         };
 
-        if (!state.txns) state.txns = [];
-        state.txns.push(newTx);
+        if (!window.state.txns) window.state.txns = [];
+        window.state.txns.push(newTx);
         importedCount++;
       }
     }
 
-    await saveState();
+    await window.saveState();
     document.getElementById('modal-container').innerHTML = '';
-    state.screen = 'home';
-    showToast(`Imported ${importedCount} transactions`, 'success', 3000);
-    render();
+    window.state.screen = 'home';
+    window.showToast(`Imported ${importedCount} transactions`, 'success', 3000);
+    window.render();
   };
 
   // ================= BUDGET HISTORY ================= 
   window.showBudgetHistory = function() {
-    if (!state.budgetHistory) state.budgetHistory = [];
+    if (!window.state.budgetHistory) window.state.budgetHistory = [];
 
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
-    const currentMonthTxs = (state.txns || []).filter(tx => {
+    const currentMonthTxs = (window.state.txns || []).filter(tx => {
       const txDate = new Date(tx.date);
       const txMonth = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
       return txMonth === currentMonth && tx.type === 'expense';
     });
 
     const currentMonthSpent = currentMonthTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-    const totalBudget = Object.values(state.budgets || {}).reduce((sum, b) => sum + (b || 0), 0);
+    const totalBudget = Object.values(window.state.budgets || {}).reduce((sum, b) => sum + (b || 0), 0);
     const currentUsagePercent = totalBudget > 0 ? Math.round((currentMonthSpent / totalBudget) * 100) : 0;
 
-    if (!state.budgetHistory.find(h => h.month === currentMonth)) {
-      state.budgetHistory.push({
+    if (!window.state.budgetHistory.find(h => h.month === currentMonth)) {
+      window.state.budgetHistory.push({
         month: currentMonth,
         spent: currentMonthSpent,
         budget: totalBudget,
@@ -286,7 +325,7 @@ if (isDesktopMode) {
       });
     }
 
-    state.budgetHistory.sort((a, b) => new Date(b.month) - new Date(a.month));
+    window.state.budgetHistory.sort((a, b) => new Date(b.month) - new Date(a.month));
 
     const content = document.getElementById('screen-content');
     content.innerHTML = `
@@ -297,7 +336,7 @@ if (isDesktopMode) {
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 32px;">
-          ${state.budgetHistory.slice(0, 12).map((h, idx) => {
+          ${window.state.budgetHistory.slice(0, 12).map((h, idx) => {
             const color = h.usagePercent > 100 ? 'var(--red-bar)' : 
                          h.usagePercent > 75 ? 'var(--amber-bar)' : 
                          'var(--green-bar)';
@@ -345,14 +384,14 @@ if (isDesktopMode) {
                   <div>
                     <div style="font-size: 12px; color: var(--cream-dim); margin-bottom: 4px;">Spent</div>
                     <div style="font-weight: 700; color: var(--cream); font-size: 16px;">
-                      ${cur()}${h.spent.toFixed(2)}
+                      ${window.cur()}${h.spent.toFixed(2)}
                     </div>
                   </div>
                   <div style="border-right: 1px solid var(--stripe);"></div>
                   <div>
                     <div style="font-size: 12px; color: var(--cream-dim); margin-bottom: 4px;">Budget</div>
                     <div style="font-weight: 700; color: var(--cream); font-size: 16px;">
-                      ${cur()}${h.budget.toFixed(2)}
+                      ${window.cur()}${h.budget.toFixed(2)}
                     </div>
                   </div>
                 </div>
@@ -369,89 +408,16 @@ if (isDesktopMode) {
                     text-align: center;
                     font-weight: 500;
                   ">
-                    Over budget by ${cur()}${(h.spent - h.budget).toFixed(2)}
+                    Over budget by ${window.cur()}${(h.spent - h.budget).toFixed(2)}
                   </div>
                 ` : ''}
               </div>
             `;
           }).join('')}
         </div>
-
-        <div style="
-          background: var(--card);
-          border: 1px solid var(--stripe);
-          border-radius: 12px;
-          padding: 24px;
-        ">
-          <h3 style="color: var(--cream); margin-bottom: 16px; font-size: 16px;">Summary</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-            <div style="text-align: center; padding: 12px;">
-              <div style="color: var(--cream-dim); font-size: 13px; margin-bottom: 8px;">Average Monthly Spend</div>
-              <div style="font-size: 24px; font-weight: 700; color: var(--orange);">
-                ${cur()}${(state.budgetHistory.reduce((sum, h) => sum + h.spent, 0) / state.budgetHistory.length).toFixed(2)}
-              </div>
-            </div>
-            <div style="text-align: center; padding: 12px;">
-              <div style="color: var(--cream-dim); font-size: 13px; margin-bottom: 8px;">Highest Usage</div>
-              <div style="font-size: 24px; font-weight: 700; color: var(--red-bar);">
-                ${Math.max(...state.budgetHistory.map(h => h.usagePercent))}%
-              </div>
-            </div>
-            <div style="text-align: center; padding: 12px;">
-              <div style="color: var(--cream-dim); font-size: 13px; margin-bottom: 8px;">Total Months Tracked</div>
-              <div style="font-size: 24px; font-weight: 700; color: var(--green-bar);">
-                ${state.budgetHistory.length}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     `;
 
-    state.screen = 'history';
+    window.state.screen = 'history';
   };
-
-  // ================= MONTHLY BUDGET REFRESH ================= 
-  window.checkMonthlyBudgetReset = function() {
-    if (!state.lastBudgetResetMonth) {
-      state.lastBudgetResetMonth = new Date().toISOString().slice(0, 7);
-      return;
-    }
-
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    if (currentMonth !== state.lastBudgetResetMonth) {
-      const monthStart = new Date(state.lastBudgetResetMonth + '-01');
-      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
-      
-      const monthTxs = (state.txns || []).filter(tx => {
-        const txDate = new Date(tx.date);
-        return txDate >= monthStart && txDate <= monthEnd && tx.type === 'expense';
-      });
-
-      const monthSpent = monthTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-      const totalBudget = Object.values(state.budgets || {}).reduce((sum, b) => sum + (b || 0), 0);
-
-      if (!state.budgetHistory) state.budgetHistory = [];
-      if (!state.budgetHistory.find(h => h.month === state.lastBudgetResetMonth)) {
-        state.budgetHistory.push({
-          month: state.lastBudgetResetMonth,
-          spent: monthSpent,
-          budget: totalBudget,
-          usagePercent: totalBudget > 0 ? Math.round((monthSpent / totalBudget) * 100) : 0
-        });
-      }
-
-      state.lastBudgetResetMonth = currentMonth;
-      saveState();
-      
-      showToast('Budget reset for new month', 'success', 2000);
-    }
-  };
-
-  // Check on app init
-  setTimeout(() => {
-    if (window.state && window.state.budgets) {
-      checkMonthlyBudgetReset();
-    }
-  }, 1000);
 }

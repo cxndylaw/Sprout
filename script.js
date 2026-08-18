@@ -138,7 +138,7 @@ const DEFAULT_STATE = {
   selectedTxnId: null, unlockedBadges: [], badgeDates: {},
   firstLogin: true, selectedBadgeId: null,
   showResetModal: false, resetStep: 0,
-  setupComplete: false, setupStep: 0,
+  setupComplete: true, setupStep: 0,
   subscriptions: [], nextSubId: 1,
   showAddSub: false, showEditSub: false, editSubData: null,
   showEditAccount: false,
@@ -206,6 +206,9 @@ async function loadState() {
       // Existing user — load their saved data on top of clean defaults
       Object.assign(state, DEFAULT_STATE, row.data);
     }
+    // Always skip setup page - go straight to app
+    state.setupComplete = true;
+    state.setupStep = 0;
     // New user or existing — always clear localStorage, Supabase is source of truth
     localStorage.removeItem('sprout_data');
     
@@ -408,6 +411,12 @@ function spentByCat(cat) {
   return state.txns.filter(t => t.type === 'expense' && t.cat === cat).reduce((s, t) => s + t.amount, 0);
 }
 
+function spentByCatThisMonth(cat) {
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return state.txns.filter(t => t.type === 'expense' && t.cat === cat && t.date.slice(0, 7) === currentMonth).reduce((s, t) => s + t.amount, 0);
+}
+
 function txnsForPeriod() {
   if (state.period === 'allTime') return [...state.txns];
   const ref = new Date();
@@ -608,35 +617,8 @@ function renderNav() {
     ${item('bank', 'Bank', 'bank')}
     <div class="fab" onclick="openAddTxn()">${fabIcon()}</div>
     ${item('budget', 'Budget', 'budget')}
-    <div style="position: relative;">
-      <button class="nav-btn" onclick="toggleMobileMenu()" style="position: relative;">
-        ${ICON.sliders}<span>More</span>
-      </button>
-      <div id="mobile-menu" style="display: none; position: absolute; bottom: 60px; right: 0; background: var(--card); border: 1px solid var(--stripe); border-radius: 8px; width: 180px; overflow: hidden; z-index: 100;">
-        <button onclick="goToImport()" style="width: 100%; padding: 12px; text-align: left; background: none; border: none; color: var(--cream); font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--stripe);">
-          ${ICON.arrowUp} Import
-        </button>
-        <button onclick="goToHistory()" style="width: 100%; padding: 12px; text-align: left; background: none; border: none; color: var(--cream); font-size: 13px; cursor: pointer;">
-          ${ICON.calendar} Budget History
-        </button>
-      </div>
-    </div>
+    ${item('account', 'Account', 'account')}
   </div>`;
-}
-
-function toggleMobileMenu() {
-  const menu = document.getElementById('mobile-menu');
-  if (menu) menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-}
-
-function goToImport() {
-  document.getElementById('mobile-menu').style.display = 'none';
-  showMobileUploadTransactionsModal();
-}
-
-function goToHistory() {
-  document.getElementById('mobile-menu').style.display = 'none';
-  showMobileBudgetHistory();
 }
 
 /* ---------- Home ---------- */
@@ -1476,7 +1458,7 @@ function renderBudget() {
   if (isBudget) {
     const sortedCats = Object.keys(state.budgets).sort((a, b) => {
       if (state.budgetSort === 'spent') {
-        return spentByCat(b) - spentByCat(a); // High to low
+        return spentByCatThisMonth(b) - spentByCatThisMonth(a); // High to low
       } else if (state.budgetSort === 'name') {
         return a.localeCompare(b);
       } else {
@@ -1487,7 +1469,7 @@ function renderBudget() {
     cardsHtml = `<div class="grid2">` + sortedCats.map(cat => {
       const budget = getBudgetForCat(cat);
       
-      const spent = spentByCat(cat);
+      const spent = spentByCatThisMonth(cat);
       const remaining = budget - spent;
       const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
       const barColor = pct >= 100 ? 'var(--red-bar)' : pct >= 80 ? 'var(--amber-bar)' : 'var(--green-bar)';
@@ -1589,6 +1571,7 @@ function renderBudget() {
         <button class="toggle-btn goal ${!isBudget ? 'active goal' : ''}" onclick="setBudgetTab('goal')">Goal</button>
       </div>
       <div style="display:flex;gap:8px;">
+        ${isBudget ? `<button class="icon-btn" onclick="showMobileBudgetHistory()" title="Budget History">${ICON.calendar}</button>` : ''}
         <button class="icon-btn" onclick="openAddBudgetOrGoal()">${ICON.plus}</button>
         <div class="sort-dropdown">
           <button class="icon-btn" id="sort-btn" onclick="toggleSortMenu()">${ICON.sliders}</button>
@@ -1915,7 +1898,7 @@ function sortBudgets(by) {
     cats.sort();
     showToast('Sorted by name', 'info', 2000);
   } else if (by === 'spent') {
-    cats.sort((a, b) => spentByCat(b) - spentByCat(a));
+    cats.sort((a, b) => spentByCatThisMonth(b) - spentByCatThisMonth(a));
     showToast('Sorted by spent', 'info', 2000);
   } else if (by === 'budget') {
     cats.sort((a, b) => state.budgets[b] - state.budgets[a]);
@@ -2613,7 +2596,7 @@ function renderAddTxn() {
   let budgetInfo = '';
   if (isExpense && f.cat) {
     const budget = getBudgetForCat(f.cat);
-    const spent = spentByCat(f.cat);
+    const spent = spentByCatThisMonth(f.cat);
     if (budget) {
       const remaining = budget - spent;
       const pct = Math.round((spent / budget) * 100);
@@ -2682,7 +2665,7 @@ function renderAddTxn() {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
       <button class="back-btn" onclick="goTo('home')">${ICON.back}</button>
       <div style="font-size:16px;font-weight:700;">New Transaction</div>
-      <div style="width:36px;"></div>
+      <button class="icon-btn" onclick="showMobileUploadTransactionsModal()" title="Import" style="background:none;border:none;color:var(--cream);cursor:pointer;padding:4px;display:flex;align-items:center;width:36px;height:36px;">${ICON.arrowUp}</button>
     </div>
 
     <!-- Type toggle - large pill -->
@@ -3843,9 +3826,73 @@ function openTxnDetail(id) {
   render();
 }
 
+function editTxnDetail(id) {
+  const tx = state.txns.find(t => t.id === id);
+  if (!tx) return;
+  
+  // Show inline edit form
+  const allCats = [...new Set(state.txns.filter(t => t.cat).map(t => t.cat)), ...Object.keys(state.budgets)];
+  const uniqueCats = [...new Set(allCats)];
+  
+  state.editingTxnId = id;
+  state.editingTxnDesc = tx.desc;
+  state.editingTxnCat = tx.cat || 'Other';
+  render();
+}
+
+function saveTxnEdit() {
+  const tx = state.txns.find(t => t.id === state.editingTxnId);
+  if (!tx) return;
+  
+  tx.desc = state.editingTxnDesc || tx.desc;
+  tx.cat = state.editingTxnCat || tx.cat;
+  
+  delete state.editingTxnId;
+  delete state.editingTxnDesc;
+  delete state.editingTxnCat;
+  
+  saveState();
+  showToast('Transaction updated', 'success', 2000);
+  render();
+}
+
+function cancelTxnEdit() {
+  delete state.editingTxnId;
+  delete state.editingTxnDesc;
+  delete state.editingTxnCat;
+  render();
+}
+
 function renderTxnDetail() {
   const tx = state.txns.find(t => t.id === state.selectedTxnId);
   if (!tx) { goTo('bank'); return ''; }
+
+  // If editing, show edit form
+  if (state.editingTxnId === tx.id) {
+    const allCats = [...new Set([...Object.keys(state.budgets), 'Other'])];
+    return `
+    <div class="form-header">
+      <button class="back-btn" onclick="cancelTxnEdit()">${ICON.back} Cancel</button>
+    </div>
+    
+    <div style="padding:20px;display:flex;flex-direction:column;gap:16px;">
+      <h2 style="font-size:20px;font-weight:700;">Edit Transaction</h2>
+      
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="font-size:13px;color:var(--cream-dim);font-weight:600;">Title</label>
+        <input type="text" value="${escapeHtml(state.editingTxnDesc)}" onchange="state.editingTxnDesc = this.value" style="background:var(--card);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:12px;border-radius:8px;font-family:'Poppins',sans-serif;font-size:14px;">
+      </div>
+      
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="font-size:13px;color:var(--cream-dim);font-weight:600;">Category</label>
+        <select onchange="state.editingTxnCat = this.value" style="background:var(--card);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:12px;border-radius:8px;font-family:'Poppins',sans-serif;font-size:14px;">
+          ${allCats.map(cat => `<option value="${cat}" ${state.editingTxnCat === cat ? 'selected' : ''}>${cat}</option>`).join('')}
+        </select>
+      </div>
+      
+      <button onclick="saveTxnEdit()" style="background:var(--income);color:var(--bg);padding:12px;border-radius:8px;border:none;font-weight:600;cursor:pointer;margin-top:12px;">Save Changes</button>
+    </div>`;
+  }
 
   const color = CAT_COLOR[tx.cat] || (tx.type === 'income' ? '#10b981' : '#6b7280');
   const iconKey = CAT_ICON[tx.cat] || 'misc';
@@ -3929,7 +3976,12 @@ function renderTxnDetail() {
   </div>
 
   <!-- Actions -->
-  <div style="display:flex;justify-content:center;margin-bottom:24px;">
+  <div style="display:flex;justify-content:center;gap:12px;margin-bottom:24px;">
+    ${tx.isAutoAdded ? `
+    <button onclick="editTxnDetail(${tx.id})" style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#3b82f6;font-size:11px;font-family:'Poppins',sans-serif;padding:7px 16px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:500;">
+      ${ICON.pencil} Edit
+    </button>
+    ` : ''}
     <button onclick="deleteTxnConfirm(${tx.id})" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);color:#ef4444;font-size:11px;font-family:'Poppins',sans-serif;padding:7px 16px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:500;">
       ${ICON.trash} Delete
     </button>
@@ -4044,17 +4096,9 @@ async function initApp() {
       await loadState();
       if (!state.unlockedBadges) state.unlockedBadges = [];
 
-      if (!state.setupComplete) {
-        if (pendingSignupName) { state.userName = pendingSignupName; pendingSignupName = ''; }
-        else if (!state.userName && currentUser.email) {
-          const emailName = currentUser.email.split('@')[0].replace(/[._-]/g, ' ');
-          state.userName = emailName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        }
-        state.screen = 'setup';
-        state.setupStep = 1;
-      } else {
-        state.screen = 'home';
-      }
+      // Always skip setup - go to home
+      state.screen = 'home';
+      state.setupComplete = true;
 
       hideResumeLoader();
       render();
@@ -4186,14 +4230,50 @@ function showMobileUploadTransactionsModal() {
         transaction[header] = values[idx] || '';
       });
 
-      if (transaction.date && transaction.amount) {
-        preview.innerHTML += `
-          <div style="padding: 6px; border-bottom: 1px solid var(--stripe);">
-            <div style="color: var(--cream); font-weight: 500;">${transaction.description || 'Imported'}</div>
-            <div style="color: var(--cream-dim); font-size: 11px;">${transaction.date} • ${transaction.category}</div>
-          </div>
-        `;
+      // Support both Westpac and generic formats
+      let date, desc, category, amount, type;
+      
+      if (transaction.date && (transaction['debit amount'] || transaction['credit amount'])) {
+        // Westpac format
+        date = transaction.date;
+        desc = transaction.narrative || 'Transaction';
+        
+        // Skip TFR Westpac (internal transfers)
+        if (desc.toUpperCase().includes('TFR') || desc.toUpperCase().includes('TRANSFER')) {
+          continue;
+        }
+        
+        category = 'Other'; // Ignore Categories column - user will categorize after import
+        
+        const debit = parseFloat(transaction['debit amount']) || 0;
+        const credit = parseFloat(transaction['credit amount']) || 0;
+        
+        if (debit > 0) {
+          amount = debit;
+          type = 'expense';
+        } else if (credit > 0) {
+          amount = credit;
+          type = 'income';
+        } else {
+          continue;
+        }
+      } else {
+        // Generic format
+        if (!transaction.date || !transaction.amount) continue;
+        date = transaction.date;
+        desc = transaction.description || 'Imported';
+        category = transaction.category || 'Other';
+        amount = Math.abs(parseFloat(transaction.amount) || 0);
+        type = transaction.type || 'expense';
       }
+
+      preview.innerHTML += `
+        <div style="padding: 6px; border-bottom: 1px solid var(--stripe);">
+          <div style="color: var(--cream); font-weight: 500;">${desc}</div>
+          <div style="color: var(--cream-dim); font-size: 11px;">${date} • ${category}</div>
+          <div style="color: ${type === 'income' ? 'var(--income)' : 'var(--expense)'}; font-size: 11px; font-weight: 600;">${type === 'income' ? '+' : '-'}${amount.toFixed(2)}</div>
+        </div>
+      `;
     }
 
     if (lines.length > 1) {
@@ -4222,14 +4302,66 @@ window.confirmMobileImportTransactions = async function() {
       transaction[header] = values[idx] || '';
     });
 
-    if (transaction.date && transaction.amount) {
+    // Support both Westpac and generic formats
+    let date, desc, amount, category, type;
+    
+    if (transaction.date && (transaction['debit amount'] || transaction['credit amount'])) {
+      // Westpac format
+      date = transaction.date;
+      desc = transaction.narrative || 'Transaction';
+      
+      // Skip TFR Westpac (internal transfers)
+      if (desc.toUpperCase().includes('TFR') || desc.toUpperCase().includes('TRANSFER')) {
+        continue;
+      }
+      
+      category = 'Other'; // Ignore Categories column - user will categorize after import
+      
+      const debit = parseFloat(transaction['debit amount']) || 0;
+      const credit = parseFloat(transaction['credit amount']) || 0;
+      
+      if (debit > 0) {
+        amount = debit;
+        type = 'expense';
+      } else if (credit > 0) {
+        amount = credit;
+        type = 'income';
+      } else {
+        continue; // Skip if no amount
+      }
+    } else {
+      // Generic format fallback
+      date = transaction.date;
+      desc = transaction.description || 'Imported Transaction';
+      amount = Math.abs(parseFloat(transaction.amount) || 0);
+      category = transaction.category || 'Other';
+      type = (transaction.type || 'expense').toLowerCase();
+    }
+
+    if (date && amount > 0) {
+      // Parse date from DD/MM/YYYY to YYYY-MM-DD
+      let formattedDate = date;
+      if (date && date.includes('/')) {
+        const parts = date.split('/');
+        if (parts.length === 3) {
+          // Handle DD/MM/YYYY or MM/DD/YYYY format
+          const day = parts[0].padStart(2, '0');
+          const month = parts[1].padStart(2, '0');
+          const year = parts[2];
+          formattedDate = `${year}-${month}-${day}`;
+        }
+      }
+      
+      // Clean up description - remove quotes and extra whitespace
+      let cleanDesc = desc.replace(/^["']|["']$/g, '').trim();
+      
       const newTx = {
         id: Date.now() + i,
-        date: transaction.date,
-        desc: transaction.description || 'Imported Transaction',
-        amount: Math.abs(parseFloat(transaction.amount) || 0),
-        cat: transaction.category || 'Other',
-        type: (transaction.type || 'expense').toLowerCase(),
+        date: formattedDate,
+        desc: cleanDesc,
+        amount: amount,
+        cat: category,
+        type: type,
         isAutoAdded: true,
         source: 'csv-import'
       };
@@ -4359,3 +4491,52 @@ if (window.visualViewport) {
     }, 100);
   });
 }
+
+// ================= MONTHLY BUDGET AUTO-REFRESH ================= 
+function checkMonthlyBudgetReset() {
+  if (!state.lastBudgetResetMonth) {
+    state.lastBudgetResetMonth = new Date().toISOString().slice(0, 7);
+    return;
+  }
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  if (currentMonth !== state.lastBudgetResetMonth) {
+    const monthStart = new Date(state.lastBudgetResetMonth + '-01');
+    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+    
+    const monthTxs = (state.txns || []).filter(tx => {
+      const txDate = new Date(tx.date);
+      return txDate >= monthStart && txDate <= monthEnd && tx.type === 'expense';
+    });
+
+    const monthSpent = monthTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+    const totalBudget = Object.values(state.budgets || {}).reduce((sum, b) => sum + (b || 0), 0);
+
+    if (!state.budgetHistory) state.budgetHistory = [];
+    if (!state.budgetHistory.find(h => h.month === state.lastBudgetResetMonth)) {
+      state.budgetHistory.push({
+        month: state.lastBudgetResetMonth,
+        spent: monthSpent,
+        budget: totalBudget,
+        usagePercent: totalBudget > 0 ? Math.round((monthSpent / totalBudget) * 100) : 0
+      });
+    }
+
+    state.lastBudgetResetMonth = currentMonth;
+    saveState();
+    showToast('Budget reset for new month', 'success', 2000);
+    render();
+  }
+}
+
+// Check on app init
+setTimeout(() => {
+  checkMonthlyBudgetReset();
+}, 1000);
+
+// Check periodically every minute for month changes
+setInterval(() => {
+  if (window.state && window.state.budgets) {
+    checkMonthlyBudgetReset();
+  }
+}, 60000);

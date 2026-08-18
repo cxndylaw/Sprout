@@ -112,9 +112,10 @@ body.desktop-mode {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 40px 48px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--card) transparent;
+  scrollbar-width: auto;
+  scrollbar-color: var(--card-hi) var(--card);
   scroll-behavior: smooth;
+  height: 100%;
 }
 
 #screen-content::-webkit-scrollbar {
