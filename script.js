@@ -149,6 +149,8 @@ const DEFAULT_STATE = {
   lastImportIds: [], // Track last import for undo
   selectedTxns: [], // For bulk delete
   bulkDeleteMode: false, // Toggle bulk delete mode
+  reviewMode: false, // Review unreviewed transactions
+  currentReviewIndex: 0, // Current transaction being reviewed
 };
 
 let state = { ...DEFAULT_STATE };
@@ -498,6 +500,7 @@ function render() {
   else if (state.screen === 'addTxn') html = renderAddTxn();
   else if (state.screen === 'subscriptions') html = renderSubscriptions();
   else if (state.screen === 'txnDetail') html = renderTxnDetail();
+  else if (state.screen === 'reviewTxns') html = renderReviewTransactions();
   else if (state.screen === 'achievements') html = renderAchievements();
 
   // Only add page-enter animation when screen changes
@@ -1323,7 +1326,12 @@ function renderBank() {
     <button onclick="deleteBulkTxns()" style="background:var(--expense);color:white;border:none;cursor:pointer;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;">${ICON.trash} Delete</button>
   </div>
   ` : `
-  <button onclick="toggleBulkDelete()" style="background:none;border:1px solid rgba(255,255,255,0.12);color:var(--cream-dim);cursor:pointer;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:6px;">${ICON.trash} Bulk Delete</button>
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+    <button onclick="toggleBulkDelete()" style="background:none;border:1px solid rgba(255,255,255,0.12);color:var(--cream-dim);cursor:pointer;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap;">${ICON.trash} Bulk Delete</button>
+    ${getUnreviewedTransactions().length > 0 ? `
+    <button onclick="startReviewMode()" style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);color:#3b82f6;cursor:pointer;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap;">${ICON.arrowUp} Review (${getUnreviewedTransactions().length})</button>
+    ` : ''}
+  </div>
   `}
 
   <!-- Transactions -->
@@ -4469,7 +4477,8 @@ window.confirmMobileImportTransactions = async function() {
         cat: category,
         type: type,
         isAutoAdded: true,
-        source: 'csv-import'
+        source: 'csv-import',
+        reviewed: false  // Mark as not reviewed yet
       };
 
       if (!state.txns) state.txns = [];
@@ -4565,6 +4574,127 @@ function undoImport() {
   saveState();
   showToast(`${count} transactions removed`, 'success', 2000);
   render();
+}
+
+/* ================= REVIEW TRANSACTIONS ================= */
+function getUnreviewedTransactions() {
+  return state.txns.filter(t => t.isAutoAdded && !t.reviewed);
+}
+
+function startReviewMode() {
+  const unreviewed = getUnreviewedTransactions();
+  if (unreviewed.length === 0) {
+    showToast('All transactions reviewed!', 'success', 2000);
+    return;
+  }
+  state.reviewMode = true;
+  state.currentReviewIndex = 0;
+  state.prevScreen = state.screen;
+  state.screen = 'reviewTxns';
+  render();
+}
+
+function exitReviewMode() {
+  state.reviewMode = false;
+  state.currentReviewIndex = 0;
+  goTo(state.prevScreen || 'bank');
+}
+
+function reviewAndCategorize(category) {
+  const unreviewed = getUnreviewedTransactions();
+  if (unreviewed.length === 0) return;
+  
+  const currentTx = unreviewed[state.currentReviewIndex];
+  if (currentTx) {
+    currentTx.cat = category;
+    currentTx.reviewed = true;
+  }
+  
+  saveState();
+  
+  // Move to next
+  if (state.currentReviewIndex < unreviewed.length - 1) {
+    state.currentReviewIndex++;
+    showToast(`Categorized as ${category}`, 'success', 1000);
+    render();
+  } else {
+    showToast('All reviewed! ✨', 'success', 2000);
+    setTimeout(() => exitReviewMode(), 1500);
+  }
+}
+
+function renderReviewTransactions() {
+  const unreviewed = getUnreviewedTransactions();
+  if (unreviewed.length === 0) {
+    return `
+    <div style="padding:40px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;">
+      <div style="font-size:48px;margin-bottom:16px;">✨</div>
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px;">All caught up!</div>
+      <div style="color:var(--cream-dim);margin-bottom:24px;font-size:14px;">All transactions have been reviewed</div>
+      <button onclick="goTo('bank')" style="background:var(--orange);color:var(--bg);border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-weight:600;">Back to Transactions</button>
+    </div>
+    `;
+  }
+  
+  const tx = unreviewed[state.currentReviewIndex];
+  const progress = state.currentReviewIndex + 1;
+  const total = unreviewed.length;
+  const progressPercent = (progress / total) * 100;
+  
+  // Get categories based on transaction type
+  const categoryList = tx.type === 'income' 
+    ? INCOME_CATS 
+    : EXPENSE_CATS_PRIMARY.concat(EXPENSE_CATS_MORE);
+  
+  const iconKey = CAT_ICON[tx.cat] || 'misc';
+  const color = CAT_COLOR[tx.cat] || '#6b7280';
+  
+  // Build category buttons outside template literal to avoid backtick issues
+  const categoryButtons = categoryList.map(cat => {
+    const catColor = CAT_COLOR[cat] || '#6b7280';
+    const catIcon = ICON[CAT_ICON[cat] || 'misc'];
+    return `<button onclick="reviewAndCategorize('${cat}')" style="padding:12px 8px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:10px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;font-weight:600;min-height:80px;justify-content:center;" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'"><span style="color:${catColor};font-size:20px;">${catIcon}</span><span style="text-align:center;line-height:1.2;">${cat}</span></button>`;
+  }).join('');
+  
+  return `
+  <div style="padding:20px;max-width:100%;">
+    <!-- Progress bar -->
+    <div style="background:var(--card);padding:16px;margin-bottom:16px;border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:600;">Reviewing Transactions</span>
+        <span style="font-size:13px;color:var(--cream-dim);">${progress}/${total}</span>
+      </div>
+      <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${progressPercent}%;background:var(--orange);transition:width 0.3s;"></div>
+      </div>
+    </div>
+
+    <!-- Transaction card -->
+    <div style="background:var(--card);border-radius:12px;padding:24px;margin-bottom:24px;text-align:center;">
+      <div style="font-size:12px;color:var(--cream-dim);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">TRANSACTION ${progress} OF ${total}</div>
+      <div style="width:64px;height:64px;border-radius:16px;background:${color}22;border:1.5px solid ${color}44;display:flex;align-items:center;justify-content:center;color:${color};margin:0 auto 16px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${ICON[iconKey]?.match(/<svg[^>]*>(.*?)<\/svg>/s)?.[1] || ''}</svg>
+      </div>
+      <div style="font-size:14px;color:var(--cream-dim);margin-bottom:8px;">${escapeHtml(tx.desc)}</div>
+      <div style="font-size:28px;font-weight:700;color:var(--cream);margin-bottom:16px;">${tx.type === 'income' ? '+' : '-'}${cur()}${fmt(tx.amount)}</div>
+      <div style="font-size:12px;color:var(--cream-dim);">${dmy(tx.date)}</div>
+    </div>
+
+    <!-- Category buttons -->
+    <div style="margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--cream-dim);">SELECT CATEGORY</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(100px, 1fr));gap:8px;">
+        ${categoryButtons}
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:24px;">
+      <button onclick="exitReviewMode()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:12px;border-radius:8px;cursor:pointer;font-weight:600;">Exit Review</button>
+      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:12px;border-radius:8px;cursor:pointer;font-weight:600;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">${ICON.arrowDown} Previous</button>
+    </div>
+  </div>
+  `;
 }
 
 /* ================= BULK DELETE ================= */

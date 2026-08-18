@@ -117,6 +117,127 @@ if (document.body.classList.contains('desktop-mode')) {
     window.render();
   };
 
+  // ================= REVIEW TRANSACTIONS ================= 
+  window.getUnreviewedTransactions = function() {
+    return window.state.txns.filter(t => t.isAutoAdded && !t.reviewed);
+  };
+
+  window.startReviewMode = function() {
+    const unreviewed = window.getUnreviewedTransactions();
+    if (unreviewed.length === 0) {
+      window.showToast('All transactions reviewed!', 'success', 2000);
+      return;
+    }
+    window.state.reviewMode = true;
+    window.state.currentReviewIndex = 0;
+    window.state.prevScreen = window.state.screen;
+    window.state.screen = 'reviewTxns';
+    window.render();
+  };
+
+  window.exitReviewMode = function() {
+    window.state.reviewMode = false;
+    window.state.currentReviewIndex = 0;
+    window.state.screen = window.state.prevScreen || 'bank';
+    window.render();
+  };
+
+  window.reviewAndCategorize = function(category) {
+    const unreviewed = window.getUnreviewedTransactions();
+    if (unreviewed.length === 0) return;
+    
+    const currentTx = unreviewed[window.state.currentReviewIndex];
+    if (currentTx) {
+      currentTx.cat = category;
+      currentTx.reviewed = true;
+    }
+    
+    window.saveState();
+    
+    if (window.state.currentReviewIndex < unreviewed.length - 1) {
+      window.state.currentReviewIndex++;
+      window.showToast(`Categorized as ${category}`, 'success', 1000);
+      window.render();
+    } else {
+      window.showToast('All reviewed! ✨', 'success', 2000);
+      setTimeout(() => window.exitReviewMode(), 1500);
+    }
+  };
+
+  window.renderReviewTransactions = function() {
+    const unreviewed = window.getUnreviewedTransactions();
+    if (unreviewed.length === 0) {
+      return `
+      <div style="padding:40px 20px;text-align:center;">
+        <div style="font-size:48px;margin-bottom:16px;">✨</div>
+        <div style="font-size:18px;font-weight:600;margin-bottom:8px;">All caught up!</div>
+        <div style="color:var(--cream-dim);margin-bottom:24px;">All transactions have been reviewed</div>
+        <button onclick="window.state.screen='bank'; window.render();" style="background:var(--orange);color:var(--bg);border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-weight:600;">Back to Transactions</button>
+      </div>
+      `;
+    }
+    
+    const tx = unreviewed[window.state.currentReviewIndex];
+    const progress = window.state.currentReviewIndex + 1;
+    const total = unreviewed.length;
+    const progressPercent = (progress / total) * 100;
+    
+    // Get categories based on transaction type
+    const categoryList = tx.type === 'income' 
+      ? window.INCOME_CATS 
+      : window.EXPENSE_CATS_PRIMARY.concat(window.EXPENSE_CATS_MORE);
+    
+    const iconKey = window.CAT_ICON[tx.cat] || 'misc';
+    const color = window.CAT_COLOR[tx.cat] || '#6b7280';
+    
+    // Build category buttons with proper escaping
+    const categoryButtons = categoryList.map(cat => {
+      const catColor = window.CAT_COLOR[cat] || '#6b7280';
+      const catIcon = window.ICON[window.CAT_ICON[cat] || 'misc'];
+      return `<button onclick="window.reviewAndCategorize('${cat}')" style="padding:16px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:10px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;font-weight:600;" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'"><span style="color:${catColor};font-size:18px;">${catIcon}</span>${cat}</button>`;
+    }).join('');
+    
+    return `
+    <div style="padding:0;">
+      <!-- Progress bar -->
+      <div style="background:var(--card);padding:16px;margin-bottom:16px;border-radius:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:13px;font-weight:600;">Reviewing Transactions</span>
+          <span style="font-size:13px;color:var(--cream-dim);">${progress}/${total}</span>
+        </div>
+        <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${progressPercent}%;background:var(--orange);transition:width 0.3s;"></div>
+        </div>
+      </div>
+
+      <!-- Transaction card -->
+      <div style="background:var(--card);border-radius:12px;padding:24px;margin-bottom:24px;text-align:center;">
+        <div style="font-size:12px;color:var(--cream-dim);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">TRANSACTION ${progress} OF ${total}</div>
+        <div style="width:64px;height:64px;border-radius:16px;background:${color}22;border:1.5px solid ${color}44;display:flex;align-items:center;justify-content:center;color:${color};margin:0 auto 16px;">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${window.ICON[iconKey]?.match(/<svg[^>]*>(.*?)<\/svg>/s)?.[1] || ''}</svg>
+        </div>
+        <div style="font-size:14px;color:var(--cream-dim);margin-bottom:8px;">${window.escapeHtml ? window.escapeHtml(tx.desc) : tx.desc}</div>
+        <div style="font-size:28px;font-weight:700;color:var(--cream);margin-bottom:16px;">${tx.type === 'income' ? '+' : '-'}${window.cur()}${window.fmt(tx.amount)}</div>
+        <div style="font-size:12px;color:var(--cream-dim);">${window.dmy ? window.dmy(tx.date) : tx.date}</div>
+      </div>
+
+      <!-- Category buttons -->
+      <div style="margin-bottom:24px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--cream-dim);">SELECT CATEGORY</div>
+        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;">
+          ${categoryButtons}
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:8px;margin-bottom:24px;">
+        <button onclick="window.exitReviewMode()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:12px;border-radius:8px;cursor:pointer;font-weight:600;">Exit Review</button>
+        <button onclick="window.state.currentReviewIndex = Math.max(0, window.state.currentReviewIndex - 1); window.render();" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:12px;border-radius:8px;cursor:pointer;font-weight:600;${window.state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">← Previous</button>
+      </div>
+    </div>
+    `;
+  };
+
   // ================= SIDEBAR NAVIGATION ================= 
   function renderDesktopNav() {
     if (!window.state || !window.ICON) return;
@@ -171,14 +292,32 @@ if (document.body.classList.contains('desktop-mode')) {
       // Override render to add sidebar
       const originalRender = window.render;
       window.render = function() {
-        // Hide mobile elements
+        // Call original render first
+        originalRender.call(this);
+        
+        // Show modals on desktop by moving them from phone frame to desktop modal container
+        const phoneFrame = document.getElementById('phone');
+        const desktopModalContainer = document.getElementById('modal-container');
+        
+        if (phoneFrame && desktopModalContainer && phoneFrame.querySelector('#modal-container')) {
+          const phoneModalContainer = phoneFrame.querySelector('#modal-container');
+          desktopModalContainer.innerHTML = phoneModalContainer.innerHTML;
+          desktopModalContainer.style.display = phoneModalContainer.innerHTML ? 'block' : 'none';
+        }
+        
+        // Hide phone frame but keep it in DOM for script.js
+        phoneFrame.style.display = 'none';
+        
+        // Hide bottom nav
         const bottomNav = document.getElementById('bottom-nav-wrap');
         if (bottomNav) bottomNav.style.display = 'none';
-        const phoneFrame = document.getElementById('phone');
-        if (phoneFrame) phoneFrame.style.display = 'none';
         
-        // Call original render
-        originalRender.call(this);
+        // Lock scroll on main-content when modal is open
+        const mainContent = document.getElementById('main-content');
+        const hasModal = desktopModalContainer && desktopModalContainer.innerHTML;
+        if (mainContent) {
+          mainContent.style.overflow = hasModal ? 'hidden' : 'auto';
+        }
         
         // Render sidebar
         renderDesktopNav();
@@ -404,7 +543,8 @@ if (document.body.classList.contains('desktop-mode')) {
           cat: category,
           type: type,
           isAutoAdded: true,
-          source: 'csv-import'
+          source: 'csv-import',
+          reviewed: false  // Mark as not reviewed yet
         };
 
         if (!window.state.txns) window.state.txns = [];
