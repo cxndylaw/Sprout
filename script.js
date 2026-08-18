@@ -4713,7 +4713,7 @@ function renderReviewTransactions() {
     <!-- Action buttons -->
     <div style="display:flex;gap:6px;margin-bottom:24px;justify-content:center;max-width:200px;margin-left:auto;margin-right:auto;">
       <button onclick="exitReviewMode()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;white-space:nowrap;">Exit</button>
-      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;width:36px;padding:0;display:flex;align-items:center;justify-content:center;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">${ICON.arrowDown}</button>
+      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;width:36px;padding:0;display:flex;align-items:center;justify-content:center;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">Previous</button>
     </div>
   </div>
   `;
