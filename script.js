@@ -4598,6 +4598,12 @@ function startReviewMode() {
   state.prevScreen = state.screen;
   state.screen = 'reviewTxns';
   render();
+  
+  // Scroll to top
+  setTimeout(() => {
+    const screenContent = document.getElementById('screen-content');
+    if (screenContent) screenContent.scrollTop = 0;
+  }, 0);
 }
 
 function exitReviewMode() {
@@ -4695,9 +4701,9 @@ function renderReviewTransactions() {
     </div>
 
     <!-- Action buttons -->
-    <div style="display:flex;gap:8px;margin-bottom:24px;">
-      <button onclick="exitReviewMode()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:12px;border-radius:8px;cursor:pointer;font-weight:600;">Exit Review</button>
-      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:12px;border-radius:8px;cursor:pointer;font-weight:600;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">${ICON.arrowDown} Previous</button>
+    <div style="display:flex;gap:8px;margin-bottom:24px;flex-direction:column;">
+      <button onclick="exitReviewMode()" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:10px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;">Exit Review</button>
+      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:10px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">${ICON.arrowDown} Previous</button>
     </div>
   </div>
   `;

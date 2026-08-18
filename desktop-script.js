@@ -139,6 +139,12 @@ if (document.body.classList.contains('desktop-mode')) {
     window.state.prevScreen = window.state.screen;
     window.state.screen = 'reviewTxns';
     window.render();
+    
+    // Scroll to top
+    setTimeout(() => {
+      const screenContent = document.getElementById('screen-content');
+      if (screenContent) screenContent.scrollTop = 0;
+    }, 0);
   };
 
   window.exitReviewMode = function() {
@@ -571,10 +577,15 @@ if (document.body.classList.contains('desktop-mode')) {
     window.state.lastImportIds = importedIds;
     
     await window.saveState();
+    
+    // Close modal and show transactions with success message
+    const modal = document.querySelector('.modal-backdrop');
+    if (modal) modal.remove();
     document.getElementById('modal-container').innerHTML = '';
+    
     window.state.screen = 'bank';
     if (importedCount > 0) {
-      window.showToast(`${importedCount} transactions imported`, 'success', 6000);
+      window.showToast(`${importedCount} transactions imported • ${importedCount} to review`, 'success', 6000);
     }
     window.render();
   };
