@@ -279,11 +279,9 @@ function renderAuth() {
         </button>
     </div>
       ${!isLogin ? `<input type="text" id="auth-name" placeholder="Your name" style="margin-bottom:16px;">` : ''}
-      ${isLogin ? `
-      <button class="auth-btn" onclick="signIn()">Log In</button>
-      ` : `
-      <button class="auth-btn" onclick="signUp()">Create Account</button>
-      `}
+      <button class="auth-btn" onclick="${isLogin ? 'signIn()' : 'signUp()'}">
+        ${isLogin ? 'Log In' : 'Create Account'}
+      </button>
       <button class="auth-switch" onclick="authMode='magic';render();">✨ Sign in with magic link instead</button>
       ${isLogin ? `<div style="font-size:11px;color:var(--cream-dim);text-align:center;margin-top:8px;">Forgot password? Use magic link above</div>` : ''}
     </div>
@@ -968,7 +966,7 @@ function renderMonthlyOverview() {
 
 function getMostSpentCategory() {
   // Get the period transactions instead of all time
-  const periodTxns = getBankPeriodTransactions();
+  const periodTxns = getPeriodTransactions();
   const spentByCategory = {};
   
   periodTxns.filter(t => t.type === 'expense').forEach(t => {
@@ -4713,7 +4711,7 @@ function renderReviewTransactions() {
     <!-- Action buttons -->
     <div style="display:flex;gap:6px;margin-bottom:24px;justify-content:center;max-width:200px;margin-left:auto;margin-right:auto;">
       <button onclick="exitReviewMode()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;white-space:nowrap;">Exit</button>
-      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;width:36px;padding:0;display:flex;align-items:center;justify-content:center;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">Previous</button>
+      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;width:36px;padding:0;display:flex;align-items:center;justify-content:center;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">${ICON.arrowDown}</button>
     </div>
   </div>
   `;
