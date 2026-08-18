@@ -608,8 +608,35 @@ function renderNav() {
     ${item('bank', 'Bank', 'bank')}
     <div class="fab" onclick="openAddTxn()">${fabIcon()}</div>
     ${item('budget', 'Budget', 'budget')}
-    ${item('account', 'Account', 'account')}
+    <div style="position: relative;">
+      <button class="nav-btn" onclick="toggleMobileMenu()" style="position: relative;">
+        ${ICON.sliders}<span>More</span>
+      </button>
+      <div id="mobile-menu" style="display: none; position: absolute; bottom: 60px; right: 0; background: var(--card); border: 1px solid var(--stripe); border-radius: 8px; width: 180px; overflow: hidden; z-index: 100;">
+        <button onclick="goToImport()" style="width: 100%; padding: 12px; text-align: left; background: none; border: none; color: var(--cream); font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--stripe);">
+          ${ICON.arrowUp} Import
+        </button>
+        <button onclick="goToHistory()" style="width: 100%; padding: 12px; text-align: left; background: none; border: none; color: var(--cream); font-size: 13px; cursor: pointer;">
+          ${ICON.calendar} Budget History
+        </button>
+      </div>
+    </div>
   </div>`;
+}
+
+function toggleMobileMenu() {
+  const menu = document.getElementById('mobile-menu');
+  if (menu) menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+}
+
+function goToImport() {
+  document.getElementById('mobile-menu').style.display = 'none';
+  showMobileUploadTransactionsModal();
+}
+
+function goToHistory() {
+  document.getElementById('mobile-menu').style.display = 'none';
+  showMobileBudgetHistory();
 }
 
 /* ---------- Home ---------- */
@@ -623,43 +650,6 @@ function renderHome() {
       <div class="brand">Sprout</div>
       <div class="brand-cn">发芽</div>
     </div>
-  </div>
-
-  <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-    <button onclick="openAddTxn('expense')" style="
-      padding: 8px 14px;
-      background: linear-gradient(135deg, rgba(193, 125, 63, 0.7), rgba(220, 154, 90, 0.7));
-      border: 1px solid rgba(220, 154, 90, 0.3);
-      border-radius: 8px;
-      color: var(--cream);
-      font-weight: 500;
-      font-size: 12px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      transition: all 0.2s;
-    " onmouseover="this.style.background='linear-gradient(135deg, rgba(193, 125, 63, 0.9), rgba(220, 154, 90, 0.9))'" onmouseout="this.style.background='linear-gradient(135deg, rgba(193, 125, 63, 0.7), rgba(220, 154, 90, 0.7))'">
-      ${ICON.arrowDown} Expense
-    </button>
-    <button onclick="openAddTxn('income')" style="
-      padding: 8px 14px;
-      background: linear-gradient(135deg, rgba(127, 185, 138, 0.7), rgba(127, 185, 138, 0.9));
-      border: 1px solid rgba(127, 185, 138, 0.3);
-      border-radius: 8px;
-      color: var(--cream);
-      font-weight: 500;
-      font-size: 12px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      transition: all 0.2s;
-    " onmouseover="this.style.background='linear-gradient(135deg, rgba(127, 185, 138, 0.9), rgba(127, 185, 138, 1))'" onmouseout="this.style.background='linear-gradient(135deg, rgba(127, 185, 138, 0.7), rgba(127, 185, 138, 0.9))'">
-      ${ICON.arrowUp} Income
-    </button>
   </div>
 
   <div class="summary-card">
@@ -4116,6 +4106,213 @@ window.render = render;
 window.saveState = saveState;
 window.showToast = showToast;
 window.cur = cur;
+/* ================= MOBILE CSV IMPORT ================= */
+function showMobileUploadTransactionsModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="background: var(--bg); padding: 20px; border-radius: 16px; max-width: 100%;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="margin: 0; color: var(--cream); font-size: 18px;">Import Transactions</h2>
+        <button onclick="this.closest('.modal').remove()" style="background: none; border: none; color: var(--cream-dim); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+      
+      <p style="color: var(--cream-dim); font-size: 13px; margin-bottom: 16px;">
+        Upload CSV: Date, Description, Amount, Category, Type
+      </p>
+      
+      <input type="file" id="mobile-csv-upload" accept=".csv" style="
+        padding: 8px;
+        width: 100%;
+        border: 2px dashed var(--orange);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--cream);
+        cursor: pointer;
+        margin-bottom: 16px;
+      ">
+
+      <div id="mobile-upload-preview" style="max-height: 200px; overflow-y: auto; display: none; margin-bottom: 16px;">
+        <div id="mobile-preview-list" style="background: var(--card); border-radius: 8px; padding: 8px; font-size: 12px;"></div>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button onclick="this.closest('.modal').remove()" style="
+          flex: 1;
+          padding: 10px;
+          background: var(--card);
+          border: none;
+          border-radius: 8px;
+          color: var(--cream);
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 13px;
+        ">Cancel</button>
+        <button id="mobile-import-btn" onclick="confirmMobileImportTransactions()" style="
+          flex: 1;
+          padding: 10px;
+          background: var(--orange);
+          border: none;
+          border-radius: 8px;
+          color: #000;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 13px;
+          opacity: 0.5;
+          pointer-events: none;
+        ">Import</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('modal-container').appendChild(modal);
+  
+  const fileInput = document.getElementById('mobile-csv-upload');
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const text = await file.text();
+    const lines = text.split('\n').filter(line => line.trim());
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+    
+    const preview = document.getElementById('mobile-preview-list');
+    preview.innerHTML = '';
+
+    for (let i = 1; i < Math.min(lines.length, 6); i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      const transaction = {};
+      headers.forEach((header, idx) => {
+        transaction[header] = values[idx] || '';
+      });
+
+      if (transaction.date && transaction.amount) {
+        preview.innerHTML += `
+          <div style="padding: 6px; border-bottom: 1px solid var(--stripe);">
+            <div style="color: var(--cream); font-weight: 500;">${transaction.description || 'Imported'}</div>
+            <div style="color: var(--cream-dim); font-size: 11px;">${transaction.date} • ${transaction.category}</div>
+          </div>
+        `;
+      }
+    }
+
+    if (lines.length > 1) {
+      document.getElementById('mobile-upload-preview').style.display = 'block';
+      const btn = document.getElementById('mobile-import-btn');
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+}
+
+window.confirmMobileImportTransactions = async function() {
+  const fileInput = document.getElementById('mobile-csv-upload');
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  const text = await file.text();
+  const lines = text.split('\n').filter(line => line.trim());
+  const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+  
+  let importedCount = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',').map(v => v.trim());
+    const transaction = {};
+    headers.forEach((header, idx) => {
+      transaction[header] = values[idx] || '';
+    });
+
+    if (transaction.date && transaction.amount) {
+      const newTx = {
+        id: Date.now() + i,
+        date: transaction.date,
+        desc: transaction.description || 'Imported Transaction',
+        amount: Math.abs(parseFloat(transaction.amount) || 0),
+        cat: transaction.category || 'Other',
+        type: (transaction.type || 'expense').toLowerCase(),
+        isAutoAdded: true,
+        source: 'csv-import'
+      };
+
+      if (!state.txns) state.txns = [];
+      state.txns.push(newTx);
+      importedCount++;
+    }
+  }
+
+  await saveState();
+  document.querySelector('.modal').remove();
+  showToast(`Imported ${importedCount} transactions`, 'success', 3000);
+  goTo('bank');
+};
+
+/* ================= MOBILE BUDGET HISTORY ================= */
+function showMobileBudgetHistory() {
+  if (!state.budgetHistory) state.budgetHistory = [];
+
+  const today = new Date();
+  const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+  const currentMonthTxs = (state.txns || []).filter(tx => {
+    const txDate = new Date(tx.date);
+    const txMonth = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+    return txMonth === currentMonth && tx.type === 'expense';
+  });
+
+  const currentMonthSpent = currentMonthTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+  const totalBudget = Object.values(state.budgets || {}).reduce((sum, b) => sum + (b || 0), 0);
+  const currentUsagePercent = totalBudget > 0 ? Math.round((currentMonthSpent / totalBudget) * 100) : 0;
+
+  if (!state.budgetHistory.find(h => h.month === currentMonth)) {
+    state.budgetHistory.push({
+      month: currentMonth,
+      spent: currentMonthSpent,
+      budget: totalBudget,
+      usagePercent: currentUsagePercent
+    });
+  }
+
+  state.budgetHistory.sort((a, b) => new Date(b.month) - new Date(a.month));
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="background: var(--bg); padding: 20px; border-radius: 16px; max-height: 80vh; overflow-y: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: var(--cream); font-size: 18px;">Budget History</h2>
+        <button onclick="this.closest('.modal').remove()" style="background: none; border: none; color: var(--cream-dim); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+
+      ${state.budgetHistory.slice(0, 6).map(h => {
+        const color = h.usagePercent > 100 ? 'var(--red-bar)' : 
+                     h.usagePercent > 75 ? 'var(--amber-bar)' : 
+                     'var(--green-bar)';
+        return `
+          <div style="background: var(--card); border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="font-weight: 600; color: var(--cream); font-size: 13px;">
+                ${new Date(h.month + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+              </div>
+              <div style="background: ${color}; color: #000; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 700;">
+                ${h.usagePercent}%
+              </div>
+            </div>
+            <div style="height: 6px; background: var(--stripe); border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+              <div style="height: 100%; width: ${Math.min(h.usagePercent, 100)}%; background: ${color};"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <div><span style="color: var(--cream-dim);">Spent:</span> <strong style="color: var(--cream);">${cur()}${h.spent.toFixed(2)}</strong></div>
+              <div><span style="color: var(--cream-dim);">Budget:</span> <strong style="color: var(--cream);">${cur()}${h.budget.toFixed(2)}</strong></div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  document.getElementById('modal-container').appendChild(modal);
+}
+
 window.ICON = ICON;
 window.CAT_ICON = CAT_ICON;
 window.CAT_COLOR = CAT_COLOR;
