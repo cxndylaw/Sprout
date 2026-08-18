@@ -4661,11 +4661,13 @@ function renderReviewTransactions() {
   const iconKey = CAT_ICON[tx.cat] || 'misc';
   const color = CAT_COLOR[tx.cat] || '#6b7280';
   
-  // Build category buttons outside template literal to avoid backtick issues
+  // Build category buttons with icons
   const categoryButtons = categoryList.map(cat => {
     const catColor = CAT_COLOR[cat] || '#6b7280';
     const catIcon = ICON[CAT_ICON[cat] || 'misc'];
-    return `<button onclick="reviewAndCategorize('${cat}')" style="padding:12px 8px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:10px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;font-weight:600;min-height:80px;justify-content:center;" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'"><span style="color:${catColor};font-size:20px;">${catIcon}</span><span style="text-align:center;line-height:1.2;">${cat}</span></button>`;
+    // Extract just the SVG content to avoid nesting issues
+    const iconContent = catIcon?.match(/<svg[^>]*>(.*?)<\/svg>/s)?.[1] || '';
+    return `<button onclick="reviewAndCategorize('${cat}')" style="padding:8px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:8px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;font-weight:600;min-height:70px;justify-content:center;" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${catColor};">${iconContent}</svg><span style="text-align:center;line-height:1.1;">${cat}</span></button>`;
   }).join('');
   
   return `
@@ -4701,9 +4703,9 @@ function renderReviewTransactions() {
     </div>
 
     <!-- Action buttons -->
-    <div style="display:flex;gap:8px;margin-bottom:24px;flex-direction:column;">
-      <button onclick="exitReviewMode()" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:10px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;">Exit Review</button>
-      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:10px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">${ICON.arrowDown} Previous</button>
+    <div style="display:flex;gap:6px;margin-bottom:24px;font-size:12px;">
+      <button onclick="exitReviewMode()" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 6px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;">Exit</button>
+      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 6px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">${ICON.arrowDown}</button>
     </div>
   </div>
   `;

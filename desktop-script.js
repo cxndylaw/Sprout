@@ -206,7 +206,9 @@ if (document.body.classList.contains('desktop-mode')) {
     const categoryButtons = categoryList.map(cat => {
       const catColor = window.CAT_COLOR[cat] || '#6b7280';
       const catIcon = window.ICON[window.CAT_ICON[cat] || 'misc'];
-      return `<button onclick="window.reviewAndCategorize('${cat}')" style="padding:16px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:10px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;font-weight:600;" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'"><span style="color:${catColor};font-size:18px;">${catIcon}</span>${cat}</button>`;
+      // Extract just the SVG content
+      const iconContent = catIcon?.match(/<svg[^>]*>(.*?)<\/svg>/s)?.[1] || '';
+      return `<button onclick="window.reviewAndCategorize('${cat}')" style="padding:12px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:10px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;font-weight:600;min-height:90px;justify-content:center;" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${catColor};">${iconContent}</svg>${cat}</button>`;
     }).join('');
     
     return `
@@ -285,9 +287,9 @@ if (document.body.classList.contains('desktop-mode')) {
         window.state.screen = screen;
         
         if (screen === 'upload') {
-          showUploadTransactionsModal();
+          window.showUploadTransactionsModal();
         } else if (screen === 'history') {
-          showBudgetHistory();
+          window.showBudgetHistory();
         } else {
           window.render();
         }
@@ -482,6 +484,11 @@ if (document.body.classList.contains('desktop-mode')) {
     const file = fileInput.files[0];
     if (!file) return;
 
+    // First, close the modal immediately
+    const modal = document.querySelector('.modal-backdrop');
+    if (modal) modal.remove();
+    
+    // Then process the import
     const text = await file.text();
     const lines = text.split('\n').filter(line => line.trim());
     const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
@@ -573,20 +580,20 @@ if (document.body.classList.contains('desktop-mode')) {
       }
     }
 
-    // Save last import IDs for undo functionality
+    // Save and update state
     window.state.lastImportIds = importedIds;
-    
     await window.saveState();
     
-    // Close modal and show transactions with success message
-    const modal = document.querySelector('.modal-backdrop');
-    if (modal) modal.remove();
+    // Clear modal container and navigate
     document.getElementById('modal-container').innerHTML = '';
-    
     window.state.screen = 'bank';
+    
+    // Show success message
     if (importedCount > 0) {
       window.showToast(`${importedCount} transactions imported • ${importedCount} to review`, 'success', 6000);
     }
+    
+    // Render UI
     window.render();
   };
 
