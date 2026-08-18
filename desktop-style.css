@@ -105,6 +105,7 @@ body.desktop-mode {
   flex-direction: column;
   overflow: hidden;
   background: var(--bg);
+  min-height: 0; /* Critical for flex scroll to work */
 }
 
 #screen-content {
@@ -115,7 +116,7 @@ body.desktop-mode {
   scrollbar-width: auto;
   scrollbar-color: var(--card-hi) var(--card);
   scroll-behavior: smooth;
-  height: 100%;
+  min-height: 0; /* Critical for flex scroll to work */
 }
 
 #screen-content::-webkit-scrollbar {

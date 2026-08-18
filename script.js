@@ -33,6 +33,7 @@ const ICON = {
   x: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`,
   lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
   arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`,
+  undo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>`,
   plant: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12"/><path d="M12 12C12 7 17 4 17 4s1 5-2 8"/><path d="M12 16C12 11 7 8 7 8s-1 5 2 8"/></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
   mail: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -145,6 +146,9 @@ const DEFAULT_STATE = {
   showDeleteAccountModal: false, deleteAccountStep: 1,
   showFundGoal: false, fundGoalId: null,
   showAutoSplit: false, autoSplitIncome: '',
+  lastImportIds: [], // Track last import for undo
+  selectedTxns: [], // For bulk delete
+  bulkDeleteMode: false, // Toggle bulk delete mode
 };
 
 let state = { ...DEFAULT_STATE };
@@ -1201,17 +1205,34 @@ function renderBank() {
       }
       const iconKey = CAT_ICON[tx.cat] || 'misc';
       const color = CAT_COLOR[tx.cat] || (tx.type === 'income' ? '#10b981' : '#6b7280');
-      listHtml += `
-      <button class="txn-row2" onclick="openTxnDetail(${tx.id})">
-        <div class="txn-icon2" style="background:${color}18;color:${color};">
-          ${ICON[iconKey]}
-        </div>
-        <div class="txn-mid">
-          <div class="txn-desc2">${escapeHtml(tx.desc || tx.cat)}</div>
-          <div class="txn-cat2">${tx.cat || 'Uncategorised'}</div>
-        </div>
-        <div class="txn-amt2 ${tx.type}">${tx.type === 'income' ? '+' : '-'}${cur()}${fmt(tx.amount)}</div>
-      </button>`;
+      const isSelected = state.selectedTxns.includes(tx.id);
+      
+      if (state.bulkDeleteMode) {
+        listHtml += `
+        <button class="txn-row2" style="background:${isSelected ? 'rgba(255,255,255,0.08)' : 'transparent'}" onclick="toggleTxnSelection(${tx.id})">
+          <input type="checkbox" ${isSelected ? 'checked' : ''} style="margin-right:8px;cursor:pointer;width:18px;height:18px;">
+          <div class="txn-icon2" style="background:${color}18;color:${color};">
+            ${ICON[iconKey]}
+          </div>
+          <div class="txn-mid">
+            <div class="txn-desc2">${escapeHtml(tx.desc || tx.cat)}</div>
+            <div class="txn-cat2">${tx.cat || 'Uncategorised'}</div>
+          </div>
+          <div class="txn-amt2 ${tx.type}">${tx.type === 'income' ? '+' : '-'}${cur()}${fmt(tx.amount)}</div>
+        </button>`;
+      } else {
+        listHtml += `
+        <button class="txn-row2" onclick="openTxnDetail(${tx.id})">
+          <div class="txn-icon2" style="background:${color}18;color:${color};">
+            ${ICON[iconKey]}
+          </div>
+          <div class="txn-mid">
+            <div class="txn-desc2">${escapeHtml(tx.desc || tx.cat)}</div>
+            <div class="txn-cat2">${tx.cat || 'Uncategorised'}</div>
+          </div>
+          <div class="txn-amt2 ${tx.type}">${tx.type === 'income' ? '+' : '-'}${cur()}${fmt(tx.amount)}</div>
+        </button>`;
+      }
     });
     if (lastDate !== null) listHtml += `</div>`;
   }
@@ -1291,6 +1312,17 @@ function renderBank() {
       </div>
     </div>
   </div>
+
+  <!-- Bulk Delete Toolbar -->
+  ${state.bulkDeleteMode ? `
+  <div style="display:flex;gap:8px;margin-bottom:16px;padding:12px;background:rgba(239,68,68,0.12);border-radius:8px;align-items:center;">
+    <span style="flex:1;font-size:13px;font-weight:600;color:var(--expense);">${state.selectedTxns.length} selected</span>
+    <button onclick="toggleBulkDelete()" style="background:none;border:none;color:var(--cream-dim);cursor:pointer;padding:6px 12px;">${ICON.x} Cancel</button>
+    <button onclick="deleteBulkTxns()" style="background:var(--expense);color:white;border:none;cursor:pointer;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;">${ICON.trash} Delete</button>
+  </div>
+  ` : `
+  <button onclick="toggleBulkDelete()" style="background:none;border:1px solid rgba(255,255,255,0.12);color:var(--cream-dim);cursor:pointer;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:6px;">${ICON.trash} Bulk Delete</button>
+  `}
 
   <!-- Transactions -->
   <div class="txn-feed">${listHtml}</div>
@@ -4269,7 +4301,7 @@ function showMobileUploadTransactionsModal() {
 
       preview.innerHTML += `
         <div style="padding: 6px; border-bottom: 1px solid var(--stripe);">
-          <div style="color: var(--cream); font-weight: 500;">${desc}</div>
+          <div style="color: var(--cream); font-weight: 500;">${cleanWestpacDesc(desc)}</div>
           <div style="color: var(--cream-dim); font-size: 11px;">${date} • ${category}</div>
           <div style="color: ${type === 'income' ? 'var(--income)' : 'var(--expense)'}; font-size: 11px; font-weight: 600;">${type === 'income' ? '+' : '-'}${amount.toFixed(2)}</div>
         </div>
@@ -4295,6 +4327,8 @@ window.confirmMobileImportTransactions = async function() {
   const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
   
   let importedCount = 0;
+  const importedIds = [];
+  
   for (let i = 1; i < lines.length; i++) {
     const values = lines[i].split(',').map(v => v.trim());
     const transaction = {};
@@ -4352,8 +4386,8 @@ window.confirmMobileImportTransactions = async function() {
         }
       }
       
-      // Clean up description - remove quotes and extra whitespace
-      let cleanDesc = desc.replace(/^["']|["']$/g, '').trim();
+      // Clean up description - remove quotes, prefixes, and extra whitespace
+      let cleanDesc = cleanWestpacDesc(desc);
       
       const newTx = {
         id: Date.now() + i,
@@ -4368,15 +4402,87 @@ window.confirmMobileImportTransactions = async function() {
 
       if (!state.txns) state.txns = [];
       state.txns.push(newTx);
+      importedIds.push(newTx.id);
       importedCount++;
     }
   }
 
+  // Save last import IDs for undo functionality
+  state.lastImportIds = importedIds;
+  
   await saveState();
   document.querySelector('.modal').remove();
-  showToast(`Imported ${importedCount} transactions`, 'success', 3000);
+  
+  if (importedCount > 0) {
+    showToast(`${importedCount} transactions imported • ${ICON.undo} Undo`, 'success', 6000);
+  }
   goTo('bank');
 };
+
+/* ================= TRANSACTION DESCRIPTION CLEANER ================= */
+function cleanWestpacDesc(desc) {
+  if (!desc) return desc;
+  
+  let cleaned = desc.replace(/^["']|["']$/g, '').trim();
+  
+  // Remove "DEBIT CARD PURCHASE" prefix
+  cleaned = cleaned.replace(/^DEBIT\s+CARD\s+PURCHASE\s+/i, '').trim();
+  
+  // Remove "EFTPOS DEBIT [numbers]" prefix
+  cleaned = cleaned.replace(/^EFTPOS\s+DEBIT\s+\d+\s+/i, '').trim();
+  
+  // Remove "DEPOSIT-OSKO PAYMENT [numbers]" prefix, keep merchant name onwards
+  cleaned = cleaned.replace(/^DEPOSIT-OSKO\s+PAYMENT\s+\d+\s+/i, '').trim();
+  
+  return cleaned;
+}
+
+/* ================= IMPORT UNDO ================= */
+function undoImport() {
+  if (!state.lastImportIds || state.lastImportIds.length === 0) {
+    showToast('No import to undo', 'info', 2000);
+    return;
+  }
+  
+  const count = state.lastImportIds.length;
+  state.txns = state.txns.filter(t => !state.lastImportIds.includes(t.id));
+  state.lastImportIds = [];
+  
+  saveState();
+  showToast(`${count} transactions removed`, 'success', 2000);
+  render();
+}
+
+/* ================= BULK DELETE ================= */
+function toggleBulkDelete() {
+  state.bulkDeleteMode = !state.bulkDeleteMode;
+  if (!state.bulkDeleteMode) {
+    state.selectedTxns = [];
+  }
+  render();
+}
+
+function toggleTxnSelection(txnId) {
+  if (!state.selectedTxns.includes(txnId)) {
+    state.selectedTxns.push(txnId);
+  } else {
+    state.selectedTxns = state.selectedTxns.filter(id => id !== txnId);
+  }
+  render();
+}
+
+function deleteBulkTxns() {
+  if (state.selectedTxns.length === 0) return;
+  
+  const count = state.selectedTxns.length;
+  state.txns = state.txns.filter(t => !state.selectedTxns.includes(t.id));
+  state.selectedTxns = [];
+  state.bulkDeleteMode = false;
+  
+  saveState();
+  showToast(`${count} transactions deleted`, 'success', 2000);
+  render();
+}
 
 /* ================= MOBILE BUDGET HISTORY ================= */
 function showMobileBudgetHistory() {

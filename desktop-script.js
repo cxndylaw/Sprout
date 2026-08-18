@@ -2,6 +2,24 @@
 
 // Only run on desktop mode
 if (document.body.classList.contains('desktop-mode')) {
+  // ================= TRANSACTION DESCRIPTION CLEANER ================= 
+  function cleanWestpacDesc(desc) {
+    if (!desc) return desc;
+    
+    let cleaned = desc.replace(/^["']|["']$/g, '').trim();
+    
+    // Remove "DEBIT CARD PURCHASE" prefix
+    cleaned = cleaned.replace(/^DEBIT\s+CARD\s+PURCHASE\s+/i, '').trim();
+    
+    // Remove "EFTPOS DEBIT [numbers]" prefix
+    cleaned = cleaned.replace(/^EFTPOS\s+DEBIT\s+\d+\s+/i, '').trim();
+    
+    // Remove "DEPOSIT-OSKO PAYMENT [numbers]" prefix, keep merchant name onwards
+    cleaned = cleaned.replace(/^DEPOSIT-OSKO\s+PAYMENT\s+\d+\s+/i, '').trim();
+    
+    return cleaned;
+  }
+
   // ================= SIDEBAR NAVIGATION ================= 
   function renderDesktopNav() {
     if (!window.state || !window.ICON) return;
@@ -214,6 +232,7 @@ if (document.body.classList.contains('desktop-mode')) {
     const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
     
     let importedCount = 0;
+    const importedIds = [];
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const transaction = {};
@@ -272,8 +291,8 @@ if (document.body.classList.contains('desktop-mode')) {
           }
         }
         
-        // Clean up description - remove quotes and extra whitespace
-        let cleanDesc = desc.replace(/^["']|["']$/g, '').trim();
+        // Clean up description - remove quotes, prefixes, and extra whitespace
+        let cleanDesc = cleanWestpacDesc(desc);
         
         const newTx = {
           id: Date.now() + i,
@@ -288,14 +307,20 @@ if (document.body.classList.contains('desktop-mode')) {
 
         if (!window.state.txns) window.state.txns = [];
         window.state.txns.push(newTx);
+        importedIds.push(newTx.id);
         importedCount++;
       }
     }
 
+    // Save last import IDs for undo functionality
+    window.state.lastImportIds = importedIds;
+    
     await window.saveState();
     document.getElementById('modal-container').innerHTML = '';
-    window.state.screen = 'home';
-    window.showToast(`Imported ${importedCount} transactions`, 'success', 3000);
+    window.state.screen = 'bank';
+    if (importedCount > 0) {
+      window.showToast(`${importedCount} transactions imported`, 'success', 6000);
+    }
     window.render();
   };
 
