@@ -4132,17 +4132,48 @@ function showResumeLoader() {
   if (document.getElementById('resume-loader')) return;
   const loader = document.createElement('div');
   loader.id = 'resume-loader';
-  loader.style.cssText = `position:fixed;inset:0;background:var(--bg, #182922);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;`;
+  loader.style.cssText = `position:fixed;inset:0;background:var(--bg, #182922);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:20px;`;
   loader.innerHTML = `
-    <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes lpulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}</style>
-    <div style="position:relative;width:80px;height:80px;margin-bottom:16px;">
-      <svg viewBox="0 0 80 80" width="80" height="80" style="animation:spin 1.2s linear infinite;position:absolute;inset:0;">
-        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(127,185,138,0.2)" stroke-width="5"/>
-        <circle cx="40" cy="40" r="34" fill="none" stroke="#7fb98a" stroke-width="5" stroke-dasharray="60 154" stroke-linecap="round"/>
-      </svg>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;animation:lpulse 1.2s ease-in-out infinite;">${lotusSVG(40)}</div>
-    </div>
-    <div style="font-family:'Fraunces',serif;font-size:24px;font-style:italic;color:rgba(255,255,255,0.9);">Sprout</div>`;
+    <style>
+      @keyframes shimmer {
+        0% { background-position: -1000px 0; }
+        100% { background-position: 1000px 0; }
+      }
+      .skeleton {
+        background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+        background-size: 1000px 100%;
+        animation: shimmer 2s infinite;
+        border-radius: 8px;
+      }
+    </style>
+    <div style="width:100%;max-width:500px;">
+      <!-- Header skeleton -->
+      <div style="display:flex;gap:16px;margin-bottom:32px;align-items:center;">
+        <div class="skeleton" style="width:80px;height:80px;border-radius:50%;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div class="skeleton" style="height:20px;width:60%;margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:16px;width:40%;"></div>
+        </div>
+      </div>
+      
+      <!-- Cards skeleton -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+        <div class="skeleton" style="height:80px;"></div>
+        <div class="skeleton" style="height:80px;"></div>
+      </div>
+      
+      <!-- Transaction list skeleton -->
+      <div style="space-y:12px;">
+        ${Array(4).fill(0).map(() => `
+          <div class="skeleton" style="height:60px;margin-bottom:12px;"></div>
+        `).join('')}
+      </div>
+      
+      <!-- Loading text -->
+      <div style="text-align:center;margin-top:24px;color:rgba(255,255,255,0.6);font-size:14px;">
+        Loading your finances...
+      </div>
+    </div>`;
   document.body.appendChild(loader);
   resumeLoaderShown = true;
 }

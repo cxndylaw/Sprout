@@ -267,8 +267,6 @@ if (document.body.classList.contains('desktop-mode')) {
       { id: 'home', label: 'Dashboard', icon: 'home' },
       { id: 'budget', label: 'Budgets', icon: 'budget' },
       { id: 'bank', label: 'Transactions', icon: 'bank' },
-      { id: 'upload', label: 'Import Transactions', icon: 'arrowUp' },
-      { id: 'history', label: 'Budget History', icon: 'calendar' },
       { id: 'account', label: 'Account', icon: 'account' },
     ];
 
@@ -284,14 +282,7 @@ if (document.body.classList.contains('desktop-mode')) {
       item.addEventListener('click', () => {
         const screen = item.dataset.screen;
         window.state.screen = screen;
-        
-        if (screen === 'upload') {
-          window.showUploadTransactionsModal();
-        } else if (screen === 'history') {
-          window.showBudgetHistory();
-        } else {
-          window.render();
-        }
+        window.render();
       });
     });
   }
@@ -305,6 +296,15 @@ if (document.body.classList.contains('desktop-mode')) {
       // Override render to add sidebar
       const originalRender = window.render;
       window.render = function() {
+        // For bank screen on desktop, intercept and add action buttons
+        if (window.state && window.state.screen === 'bank') {
+          const screenContent = document.getElementById('screen-content');
+          if (screenContent && window.renderBankDesktop) {
+            screenContent.innerHTML = window.renderBankDesktop();
+            return; // Don't call originalRender to avoid double-rendering
+          }
+        }
+        
         // Call original render first
         originalRender.call(this);
         
@@ -368,8 +368,17 @@ if (document.body.classList.contains('desktop-mode')) {
 
   // ================= TRANSACTION UPLOAD ================= 
   window.showUploadTransactionsModal = function() {
+    // Ensure modal-container exists
+    let modalContainer = document.getElementById('modal-container');
+    if (!modalContainer) {
+      modalContainer = document.createElement('div');
+      modalContainer.id = 'modal-container';
+      document.body.appendChild(modalContainer);
+    }
+    
     const modal = document.createElement('div');
     modal.className = 'modal-backdrop';
+    modal.style.display = 'flex'; // Force display
     modal.innerHTML = `
       <div class="modal-content">
         <h2 style="margin-bottom: 20px; color: var(--cream);">Import Transactions</h2>
@@ -400,7 +409,7 @@ if (document.body.classList.contains('desktop-mode')) {
         </div>
 
         <div style="display: flex; gap: 12px;">
-          <button onclick="this.closest('.modal-backdrop').remove(); window.state.screen='home'; window.render();" style="
+          <button onclick="this.closest('.modal-backdrop').remove(); document.body.classList.remove('modal-open'); document.getElementById('main-content').classList.remove('modal-open'); window.state.screen='home'; window.render();" style="
             flex: 1;
             padding: 12px;
             background: var(--card);
@@ -432,7 +441,11 @@ if (document.body.classList.contains('desktop-mode')) {
       </div>
     `;
 
-    document.getElementById('modal-container').appendChild(modal);
+    modalContainer.appendChild(modal);
+    
+    // Lock scroll
+    document.body.classList.add('modal-open');
+    document.getElementById('main-content').classList.add('modal-open');
     
     const fileInput = document.getElementById('csv-upload');
     fileInput.addEventListener('change', async (e) => {
@@ -486,6 +499,10 @@ if (document.body.classList.contains('desktop-mode')) {
     // First, close the modal immediately
     const modal = document.querySelector('.modal-backdrop');
     if (modal) modal.remove();
+    
+    // Unlock scroll
+    document.body.classList.remove('modal-open');
+    document.getElementById('main-content').classList.remove('modal-open');
     
     // Then process the import
     const text = await file.text();
@@ -585,6 +602,8 @@ if (document.body.classList.contains('desktop-mode')) {
     
     // Clear modal container and navigate
     document.getElementById('modal-container').innerHTML = '';
+    document.body.classList.remove('modal-open');
+    document.getElementById('main-content').classList.remove('modal-open');
     window.state.screen = 'bank';
     
     // Show success message
@@ -716,5 +735,74 @@ if (document.body.classList.contains('desktop-mode')) {
     `;
 
     window.state.screen = 'history';
+  };
+
+  // Override renderBank for desktop to add action buttons
+  window.renderBankDesktop = function() {
+    const mobileBankHtml = window.renderBank();
+    
+    // Add action buttons at the top
+    const actionButtons = `
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
+      <button onclick="window.showUploadTransactionsModal()" style="
+        padding: 14px;
+        background: rgba(220, 154, 90, 0.15);
+        border: 1.5px solid rgba(220, 154, 90, 0.3);
+        color: var(--orange);
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      " onmouseover="this.style.background='rgba(220, 154, 90, 0.25)'" onmouseout="this.style.background='rgba(220, 154, 90, 0.15)'">
+        ${window.ICON.arrowUp}
+        Import
+      </button>
+      
+      <button onclick="window.state.form.type='expense'; window.goTo('addTxn')" style="
+        padding: 14px;
+        background: rgba(201, 107, 91, 0.15);
+        border: 1.5px solid rgba(201, 107, 91, 0.3);
+        color: var(--expense);
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      " onmouseover="this.style.background='rgba(201, 107, 91, 0.25)'" onmouseout="this.style.background='rgba(201, 107, 91, 0.15)'">
+        ${window.ICON.minus}
+        Add Expense
+      </button>
+      
+      <button onclick="window.state.form.type='income'; window.goTo('addTxn')" style="
+        padding: 14px;
+        background: rgba(127, 185, 138, 0.15);
+        border: 1.5px solid rgba(127, 185, 138, 0.3);
+        color: var(--income);
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      " onmouseover="this.style.background='rgba(127, 185, 138, 0.25)'" onmouseout="this.style.background='rgba(127, 185, 138, 0.15)'">
+        ${window.ICON.plus}
+        Add Income
+      </button>
+    </div>
+    `;
+    
+    return actionButtons + mobileBankHtml;
   };
 }
