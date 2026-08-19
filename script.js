@@ -447,7 +447,8 @@ function getPeriodTotals(period) {
   if (period === 'thisMonth') {
     const now = new Date();
     const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    filteredTxns = state.txns.filter(t => t.date >= startDate);
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+    filteredTxns = state.txns.filter(t => t.date >= startDate && t.date <= endDate);
   } else if (period === 'lastMonth') {
     const now = new Date();
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
@@ -4701,11 +4702,15 @@ function renderReviewTransactions() {
     ? INCOME_CATS 
     : EXPENSE_CATS_PRIMARY.concat(EXPENSE_CATS_MORE);
   
+  // Add custom budget categories that aren't in the default lists
+  const customCats = Object.keys(state.budgets).filter(cat => !categoryList.includes(cat));
+  const allCategories = [...categoryList, ...customCats];
+  
   const iconKey = CAT_ICON[tx.cat] || 'misc';
   const color = CAT_COLOR[tx.cat] || '#6b7280';
   
   // Build category buttons with icons
-  const categoryButtons = categoryList.map(cat => {
+  const categoryButtons = allCategories.map(cat => {
     const catColor = CAT_COLOR[cat] || '#6b7280';
     const catIcon = ICON[CAT_ICON[cat] || 'misc'];
     const iconContent = catIcon?.match(/<svg[^>]*>(.*?)<\/svg>/s)?.[1] || '';

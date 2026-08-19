@@ -741,64 +741,70 @@ if (document.body.classList.contains('desktop-mode')) {
   window.renderBankDesktop = function() {
     const mobileBankHtml = window.renderBank();
     
-    // Add action buttons at the top
+    // Add compact action buttons at the top
     const actionButtons = `
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
-      <button onclick="window.showUploadTransactionsModal()" style="
-        padding: 14px;
-        background: rgba(220, 154, 90, 0.15);
-        border: 1.5px solid rgba(220, 154, 90, 0.3);
+    <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+      <button onclick="window.showUploadTransactionsModal()" title="Import transactions from CSV" style="
+        padding: 8px 14px;
+        background: rgba(220, 154, 90, 0.1);
+        border: 1px solid rgba(220, 154, 90, 0.3);
         color: var(--orange);
-        border-radius: 10px;
+        border-radius: 8px;
         cursor: pointer;
-        font-weight: 600;
-        font-size: 13px;
-        transition: all 0.3s;
+        font-weight: 500;
+        font-size: 12px;
+        transition: all 0.2s;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-      " onmouseover="this.style.background='rgba(220, 154, 90, 0.25)'" onmouseout="this.style.background='rgba(220, 154, 90, 0.15)'">
-        ${window.ICON.arrowUp}
-        Import
+        gap: 6px;
+        height: 32px;
+        white-space: nowrap;
+      " onmouseover="this.style.background='rgba(220, 154, 90, 0.2)';this.style.borderColor='rgba(220, 154, 90, 0.5)'" onmouseout="this.style.background='rgba(220, 154, 90, 0.1)';this.style.borderColor='rgba(220, 154, 90, 0.3)'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Import CSV
       </button>
       
-      <button onclick="window.state.form.type='expense'; window.goTo('addTxn')" style="
-        padding: 14px;
-        background: rgba(201, 107, 91, 0.15);
-        border: 1.5px solid rgba(201, 107, 91, 0.3);
+      <button onclick="window.state.form.type='expense'; window.goTo('addTxn')" title="Add expense" style="
+        padding: 8px 14px;
+        background: rgba(201, 107, 91, 0.1);
+        border: 1px solid rgba(201, 107, 91, 0.3);
         color: var(--expense);
-        border-radius: 10px;
+        border-radius: 8px;
         cursor: pointer;
-        font-weight: 600;
-        font-size: 13px;
-        transition: all 0.3s;
+        font-weight: 500;
+        font-size: 12px;
+        transition: all 0.2s;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-      " onmouseover="this.style.background='rgba(201, 107, 91, 0.25)'" onmouseout="this.style.background='rgba(201, 107, 91, 0.15)'">
-        ${window.ICON.minus}
-        Add Expense
+        gap: 6px;
+        height: 32px;
+        white-space: nowrap;
+      " onmouseover="this.style.background='rgba(201, 107, 91, 0.2)';this.style.borderColor='rgba(201, 107, 91, 0.5)'" onmouseout="this.style.background='rgba(201, 107, 91, 0.1)';this.style.borderColor='rgba(201, 107, 91, 0.3)'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Expense
       </button>
       
-      <button onclick="window.state.form.type='income'; window.goTo('addTxn')" style="
-        padding: 14px;
-        background: rgba(127, 185, 138, 0.15);
-        border: 1.5px solid rgba(127, 185, 138, 0.3);
+      <button onclick="window.state.form.type='income'; window.goTo('addTxn')" title="Add income" style="
+        padding: 8px 14px;
+        background: rgba(127, 185, 138, 0.1);
+        border: 1px solid rgba(127, 185, 138, 0.3);
         color: var(--income);
-        border-radius: 10px;
+        border-radius: 8px;
         cursor: pointer;
-        font-weight: 600;
-        font-size: 13px;
-        transition: all 0.3s;
+        font-weight: 500;
+        font-size: 12px;
+        transition: all 0.2s;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-      " onmouseover="this.style.background='rgba(127, 185, 138, 0.25)'" onmouseout="this.style.background='rgba(127, 185, 138, 0.15)'">
-        ${window.ICON.plus}
-        Add Income
+        gap: 6px;
+        height: 32px;
+        white-space: nowrap;
+      " onmouseover="this.style.background='rgba(127, 185, 138, 0.2)';this.style.borderColor='rgba(127, 185, 138, 0.5)'" onmouseout="this.style.background='rgba(127, 185, 138, 0.1)';this.style.borderColor='rgba(127, 185, 138, 0.3)'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Income
       </button>
     </div>
     `;
