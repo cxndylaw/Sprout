@@ -50,7 +50,7 @@ const ICON = {
 const CAT_ICON = {
   'Shopping': 'bag', 'Eating Out': 'food', 'Fuel': 'fuel', 'Groceries': 'cart', 'Gifts': 'gift', 'Misc': 'misc',
   'Salary': 'cash', 'Freelance': 'cash', 'Gift': 'gift', 'Refund': 'cash', 'Reimburse': 'cash', 'Other': 'misc',
-  'Health': 'heart', 'Transport': 'fuel', 'Subscription': 'subscription'
+  'Health': 'heart', 'Transport': 'fuel', 'Subscription': 'subscription', 'Subscriptions': 'subscription'
 };
 
 const CAT_COLOR = {
@@ -62,6 +62,7 @@ const CAT_COLOR = {
   'Gifts':        '#ec4899',
   'Misc':         '#6b7280',
   'Subscription': '#06b6d4',
+  'Subscriptions':'#06b6d4',
   'Salary':       '#10b981',
   'Freelance':    '#10b981',
   'Refund':       '#10b981',
@@ -94,7 +95,7 @@ function cur() { return CURRENCY_SYMBOL[state.currency] || '$'; }
 
 /* ================= STATE ================= */
 const EXPENSE_CATS_PRIMARY = ['Shopping', 'Groceries', 'Eating Out', 'Health', 'Transport'];
-const EXPENSE_CATS_MORE = ['Gifts', 'Misc'];
+const EXPENSE_CATS_MORE = ['Subscriptions', 'Gifts', 'Misc'];
 const INCOME_CATS = ['Salary', 'Freelance', 'Gift', 'Refund', 'Reimburse', 'Other'];
 
 // Expose to global scope for desktop version
@@ -2688,7 +2689,7 @@ function renderAddTxn() {
   let bodyExtra = '';
   if (isExpense) {
     const budgetCats = Object.keys(state.budgets);
-    const txnCats = [...new Set(state.txns.filter(t => t.type === 'expense' && t.cat && t.cat !== 'Subscription').map(t => t.cat))];
+    const txnCats = [...new Set(state.txns.filter(t => t.type === 'expense' && t.cat && t.cat !== 'Subscriptions').map(t => t.cat))];
     const allCats = [...new Set([...budgetCats, ...txnCats])];
     // Sort by most-used first
     const catFreq = {};
@@ -2764,7 +2765,7 @@ function renderAddTxn() {
     <div class="cat-grid" style="margin-bottom:${isExpense && f.moreOpen ? '4px' : '14px'};">
       ${isExpense ? `
         ${primaryCats.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
-        <button class="cat-chip ${f.cat === 'Subscription' ? 'selected' : ''}" onclick="setTxnCat('Subscription')">Subscription</button>
+        <button class="cat-chip ${f.cat === 'Subscriptions' ? 'selected' : ''}" onclick="setTxnCat('Subscriptions')">Subscriptions</button>
         ${hasMore ? `<button class="cat-chip" onclick="toggleMore()">${f.moreOpen ? 'Less ↑' : 'More ↓'}</button>` : ''}
       ` : `
         ${INCOME_CATS.map(c => `<button class="cat-chip ${f.cat === c ? 'selected' : ''}" onclick="setTxnCat('${c}')">${c}</button>`).join('')}
@@ -3297,7 +3298,7 @@ const ALL_BADGES = [
   { id: 'big_spend',        cat: 'Transactions', icon: '💳', name: 'Big Ticket',            desc: 'Log a single expense over $500',              check: s => s.txns.some(t => t.type === 'expense' && t.amount >= 500) },
   { id: 'big_income',       cat: 'Transactions', icon: '🤑', name: 'Payday',                desc: 'Log a single income over $5,000',             check: s => s.txns.some(t => t.type === 'income' && t.amount >= 5000) },
   { id: 'big_income2',      cat: 'Transactions', icon: '💎', name: 'Windfall',              desc: 'Log a single income over $20,000',            check: s => s.txns.some(t => t.type === 'income' && t.amount >= 20000) },
-  { id: 'sub_expense',      cat: 'Transactions', icon: '🔁', name: 'Subscription Tracked',  desc: 'Log a subscription expense',                  check: s => s.txns.some(t => t.cat === 'Subscription') },
+  { id: 'sub_expense',      cat: 'Transactions', icon: '🔁', name: 'Subscription Tracked',  desc: 'Log a subscription expense',                  check: s => s.txns.some(t => t.cat === 'Subscriptions') },
   { id: 'income_split',     cat: 'Transactions', icon: '🍕', name: 'Smart Splitter',        desc: 'Split income across multiple goals',          check: s => s.txns.some(t => t.splitGoals && t.splitGoals.filter(g=>g.goalId).length > 1) },
 
   // 🎯 Goals
@@ -3375,7 +3376,7 @@ const ALL_BADGES = [
   // 🧠 Wisdom
   { id: 'used_pct_budget',  cat: 'Wisdom', icon: '🧮', name: 'Percentage Master',     desc: 'Set income % for all budget categories',      check: s => s.budgetMode==='percentage' && Object.keys(s.budgets).length>=3 && Object.keys(s.budgets).every(c=>s.budgetsPercentage[c]>0) },
   { id: 'txn_same_day',     cat: 'Wisdom', icon: '⚡', name: 'Productive Day',        desc: 'Log 5 transactions in one day',               check: s => { const d={}; s.txns.forEach(t=>d[t.date]=(d[t.date]||0)+1); return Object.values(d).some(v=>v>=5); } },
-  { id: 'all_cats_budgeted',cat: 'Wisdom', icon: '🎓', name: 'Fully Planned',         desc: 'Have a budget for every category you spend in', check: s => { const cats=new Set(s.txns.filter(t=>t.type==='expense'&&t.cat&&t.cat!=='Subscription').map(t=>t.cat)); return cats.size>=3&&[...cats].every(c=>s.budgets[c]); } },
+  { id: 'all_cats_budgeted',cat: 'Wisdom', icon: '🎓', name: 'Fully Planned',         desc: 'Have a budget for every category you spend in', check: s => { const cats=new Set(s.txns.filter(t=>t.type==='expense'&&t.cat&&t.cat!=='Subscriptions').map(t=>t.cat)); return cats.size>=3&&[...cats].every(c=>s.budgets[c]); } },
   { id: 'zero_waste',       cat: 'Wisdom', icon: '♻️', name: 'Zero Waste',            desc: 'Allocate 100% of an income to goals',         check: s => s.txns.some(t=>t.type==='income'&&t.splitGoals&&t.splitGoals.filter(g=>g.goalId).reduce((a,g)=>a+(parseFloat(g.pct)||0),0)===100) },
 
   // 🎨 Collector
@@ -3582,7 +3583,7 @@ function renderSubscriptions() {
   // Subscription txns this month (tagged as Subscription cat)
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const subTxnsThisMonth = state.txns.filter(t => t.type === 'expense' && t.cat === 'Subscription' && t.date >= startOfMonth);
+  const subTxnsThisMonth = state.txns.filter(t => t.type === 'expense' && t.cat === 'Subscriptions' && t.date >= startOfMonth);
   const trackedSpend = subTxnsThisMonth.reduce((sum, t) => sum + t.amount, 0);
 
   // All expenses this month for the comparison chart
@@ -3756,7 +3757,7 @@ function renewAllSubscriptions() {
       else if (s.cycle === 'quarterly') d.setMonth(d.getMonth() + 3);
       s.nextRenewal = d.toISOString().slice(0, 10);
       // Add expense transaction
-      state.txns.push({ id: state.nextId++, desc: s.name, amount: s.amount, type: 'expense', cat: 'Subscription', date: today });
+      state.txns.push({ id: state.nextId++, desc: s.name, amount: s.amount, type: 'expense', cat: 'Subscriptions', date: today });
       count++;
     }
   });
@@ -4606,7 +4607,7 @@ function categorizeTransaction(description, transactionType) {
   if (desc.match(/GIFT|FLOWERS|FLORIST|PRESENT|BIRTHDAY/)) return 'Gifts';
   
   // Subscription
-  if (desc.match(/SPOTIFY|NETFLIX|DISNEY|AMAZON|ADOBE|MICROSOFT|SUBSCRIPTION|MONTHLY|PREMIUM|MEMBERSHIP|PATREON|APPLE|ICLOUD|DROPBOX/)) return 'Subscription';
+  if (desc.match(/SPOTIFY|NETFLIX|DISNEY|AMAZON|ADOBE|MICROSOFT|SUBSCRIPTION|MONTHLY|PREMIUM|MEMBERSHIP|PATREON|APPLE|ICLOUD|DROPBOX/)) return 'Subscriptions';
   
   // Default
   return 'Misc';
