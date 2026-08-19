@@ -446,18 +446,24 @@ function getPeriodTotals(period) {
   
   if (period === 'thisMonth') {
     const now = new Date();
-    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
     filteredTxns = state.txns.filter(t => t.date >= startDate && t.date <= endDate);
   } else if (period === 'lastMonth') {
     const now = new Date();
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1);
-    const startDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1).toISOString().slice(0, 10);
-    const endDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0).toISOString().slice(0, 10);
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1);
+    const lastMonthYear = lastMonthDate.getFullYear();
+    const lastMonthNum = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
+    const startDate = `${lastMonthYear}-${lastMonthNum}-01`;
+    const lastDay = new Date(lastMonthYear, lastMonthDate.getMonth() + 1, 0).getDate();
+    const endDate = `${lastMonthYear}-${lastMonthNum}-${String(lastDay).padStart(2, '0')}`;
     filteredTxns = state.txns.filter(t => t.date >= startDate && t.date <= endDate);
   } else if (period === 'year') {
     const now = new Date();
-    const startDate = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+    const startDate = `${now.getFullYear()}-01-01`;
     filteredTxns = state.txns.filter(t => t.date >= startDate);
   }
   
@@ -1166,22 +1172,24 @@ function getGraphPeriodTransactions() {
 
 function getBankPeriodTransactions() {
   const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
   
   if (state.bankPeriod === 'thisMonth') {
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const startDate = startOfMonth.toISOString().split('T')[0];
-    const endDate = endOfMonth.toISOString().split('T')[0];
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
     return state.txns.filter(t => t.date >= startDate && t.date <= endDate);
   } else if (state.bankPeriod === 'lastMonth') {
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-    const startDate = startOfMonth.toISOString().split('T')[0];
-    const endDate = endOfMonth.toISOString().split('T')[0];
+    const lastMonthDate = new Date(year, now.getMonth() - 1);
+    const lastMonthYear = lastMonthDate.getFullYear();
+    const lastMonthNum = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
+    const startDate = `${lastMonthYear}-${lastMonthNum}-01`;
+    const lastDay = new Date(lastMonthYear, lastMonthDate.getMonth() + 1, 0).getDate();
+    const endDate = `${lastMonthYear}-${lastMonthNum}-${String(lastDay).padStart(2, '0')}`;
     return state.txns.filter(t => t.date >= startDate && t.date <= endDate);
   } else if (state.bankPeriod === 'year') {
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const startDate = startOfYear.toISOString().split('T')[0];
+    const startDate = `${year}-01-01`;
     return state.txns.filter(t => t.date >= startDate);
   } else if (state.bankPeriod === 'allTime') {
     return state.txns;
@@ -4702,8 +4710,10 @@ function renderReviewTransactions() {
     ? INCOME_CATS 
     : EXPENSE_CATS_PRIMARY.concat(EXPENSE_CATS_MORE);
   
-  // Add custom budget categories that aren't in the default lists
-  const customCats = Object.keys(state.budgets).filter(cat => !categoryList.includes(cat));
+  // Add custom budget categories only for expenses
+  const customCats = tx.type === 'expense' 
+    ? Object.keys(state.budgets).filter(cat => !categoryList.includes(cat))
+    : [];
   const allCategories = [...categoryList, ...customCats];
   
   const iconKey = CAT_ICON[tx.cat] || 'misc';
