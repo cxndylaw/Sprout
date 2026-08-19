@@ -206,7 +206,8 @@ if (document.body.classList.contains('desktop-mode')) {
     const categoryButtons = categoryList.map(cat => {
       const catColor = window.CAT_COLOR[cat] || '#6b7280';
       const catIcon = window.ICON[window.CAT_ICON[cat] || 'misc'];
-      return `<button onclick="window.reviewAndCategorize('${cat}')" style="padding:12px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:10px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12px;font-weight:600;min-height:90px;justify-content:center;flex: 1 1 calc(25% - 8px);" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'">${catIcon}${cat}</button>`;
+      const iconContent = catIcon?.match(/<svg[^>]*>(.*?)<\/svg>/s)?.[1] || '';
+      return `<button onclick="window.reviewAndCategorize('${cat}')" style="padding:10px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:8px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;font-weight:600;min-height:70px;justify-content:center;flex: 1 1 calc(20% - 8px);" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${catColor};">${iconContent}</svg><span style="text-align:center;line-height:1;">${cat}</span></button>`;
     }).join('');
     
     return `

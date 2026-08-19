@@ -279,9 +279,11 @@ function renderAuth() {
         </button>
     </div>
       ${!isLogin ? `<input type="text" id="auth-name" placeholder="Your name" style="margin-bottom:16px;">` : ''}
-      <button class="auth-btn" onclick="${isLogin ? 'signIn()' : 'signUp()'}">
-        ${isLogin ? 'Log In' : 'Create Account'}
-      </button>
+      ${isLogin ? `
+      <button class="auth-btn" onclick="signIn()">Log In</button>
+      ` : `
+      <button class="auth-btn" onclick="signUp()">Create Account</button>
+      `}
       <button class="auth-switch" onclick="authMode='magic';render();">✨ Sign in with magic link instead</button>
       ${isLogin ? `<div style="font-size:11px;color:var(--cream-dim);text-align:center;margin-top:8px;">Forgot password? Use magic link above</div>` : ''}
     </div>
@@ -483,6 +485,7 @@ function render() {
   if (state.screen === 'auth') {
     c.innerHTML = renderAuth();
     navWrap.innerHTML = '';
+    navWrap.style.display = 'none';
     return;
   }
   if (state.screen === 'setup') {
@@ -491,6 +494,7 @@ function render() {
     return;
   }
   navWrap.innerHTML = renderNav();
+  navWrap.style.display = ''; // Show the nav
 
   let html = '';
   if (state.screen === 'home') html = renderHome();
@@ -966,7 +970,7 @@ function renderMonthlyOverview() {
 
 function getMostSpentCategory() {
   // Get the period transactions instead of all time
-  const periodTxns = getPeriodTransactions();
+  const periodTxns = getBankPeriodTransactions();
   const spentByCategory = {};
   
   periodTxns.filter(t => t.type === 'expense').forEach(t => {
@@ -4673,7 +4677,8 @@ function renderReviewTransactions() {
   const categoryButtons = categoryList.map(cat => {
     const catColor = CAT_COLOR[cat] || '#6b7280';
     const catIcon = ICON[CAT_ICON[cat] || 'misc'];
-    return `<button onclick="reviewAndCategorize('${cat}')" style="padding:8px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:8px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;font-weight:600;min-height:70px;justify-content:center;flex: 1 1 calc(33.333% - 6px);" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'">${catIcon}<span style="text-align:center;line-height:1.1;">${cat}</span></button>`;
+    const iconContent = catIcon?.match(/<svg[^>]*>(.*?)<\/svg>/s)?.[1] || '';
+    return `<button onclick="reviewAndCategorize('${cat}')" style="padding:8px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);color:var(--cream);border-radius:8px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;font-weight:600;min-height:70px;justify-content:center;flex: 1 1 calc(33.333% - 6px);" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='${catColor}44'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.12)'"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${catColor};">${iconContent}</svg><span style="text-align:center;line-height:1.1;">${cat}</span></button>`;
   }).join('');
   
   return `
@@ -4709,9 +4714,9 @@ function renderReviewTransactions() {
     </div>
 
     <!-- Action buttons -->
-    <div style="display:flex;gap:6px;margin-bottom:24px;justify-content:center;max-width:200px;margin-left:auto;margin-right:auto;">
+    <div style="display:flex;gap:6px;margin-bottom:24px;justify-content:center;max-width:300px;margin-left:auto;margin-right:auto;">
       <button onclick="exitReviewMode()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;white-space:nowrap;">Exit</button>
-      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;width:36px;padding:0;display:flex;align-items:center;justify-content:center;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">${ICON.arrowDown}</button>
+      <button onclick="state.currentReviewIndex = Math.max(0, state.currentReviewIndex - 1); render();" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--cream);padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px;height:36px;white-space:nowrap;${state.currentReviewIndex === 0 ? 'opacity:0.5;cursor:not-allowed;' : ''}">Previous</button>
     </div>
   </div>
   `;
